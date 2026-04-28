@@ -1,0 +1,37 @@
+# Example: Quick smoke-test on 3 instances with a small local model
+# Usage: auto-swe-bench run configs/smoke-test.yaml
+
+name: smoke-test
+dataset: SWE-bench/SWE-bench_Verified
+
+instance_ids:
+  - sympy__sympy-20590
+  - django__django-11133
+  - astropy__astropy-14365
+
+model:
+  name: Llama-3.2-3B-Instruct-Q4_K_M
+  source: huggingface
+  repo_id: bartowski/Llama-3.2-3B-Instruct-GGUF
+  filename: Llama-3.2-3B-Instruct-Q4_K_M.gguf
+
+backend:
+  type: llamacpp
+  host: 127.0.0.1
+  port: 8080
+  llamacpp:
+    ctx_size: 16384
+    n_gpu_layers: auto
+    parallel: 1
+
+sampling:
+  temperature: 0.0
+  max_tokens: 2048
+
+agent:
+  max_steps: 15
+  timeout: 120
+  workers: 1
+
+evaluation:
+  run_evaluation: false   # just generate predictions for smoke testing

@@ -1,0 +1,152 @@
+"""Top-level orchestration: download → start → agent → stop → evaluate."""
+from __future__ import annotations
+
+import time
+from datetime import datetime
+from pathlib import Path
+
+from rich.console import Console
+from rich.table import Table
+
+from .agent import run_agent
+from .backends.base import Backend
+from .backends.llamacpp import LlamaCppBackend
+from .backends.openai_backend import OpenAIBackend
+from .backends.vllm import VllmBackend
+from .config import RunConfig, expand_sweep
+from .evaluator import parse_results, run_evaluation
+
+console = Console()
+
+
+def make_backend(config: RunConfig) -> Backend:
+    if config.backend.type == "llamacpp":
+        return LlamaCppBackend(config.model, config.backend, config.sampling)
+    elif config.backend.type == "vllm":
+        return VllmBackend(config.model, config.backend, config.sampling)
+    elif config.backend.type == "openai":
+        return OpenAIBackend(config.model, config.backend, config.sampling)
+    else:
+        raise ValueError(f"Unknown backend type: {config.backend.type}")
+
+
+def run_single(config: RunConfig) -> dict:
+    """
+    Run a single (non-sweep) pipeline: download → start → agent → stop → evaluate.
+    Returns result summary dict.
+    """
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    run_id = f"{config.name}_{timestamp}"
+    output_dir = Path(config.output_dir) / run_id
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    console.rule(f"[bold blue]Run: {run_id}")
+
+    backend = make_backend(config)
+
+    # 1. Download model
+    console.print("\n[bold]Step 1/4:[/bold] Downloading model...")
+    t0 = time.monotonic()
+    model_path = backend.download()
+    console.print(f"[dim]Download done in {time.monotonic()-t0:.1f}s[/dim]")
+
+    # 2. Start backend server
+    console.print("\n[bold]Step 2/4:[/bold] Starting backend server...")
+    t0 = time.monotonic()
+    backend.start(model_path)
+    backend.wait_ready()
+    console.print(f"[green]Backend ready[/green] in {time.monotonic()-t0:.1f}s — {backend.base_url}")
+
+    predictions_path: Path | None = None
+    results: dict = {}
+
+    try:
+        # 3. Run SWE-agent
+        console.print("\n[bold]Step 3/4:[/bold] Running SWE-agent...")
+        t0 = time.monotonic()
+        predictions_path = run_agent(config, backend, output_dir)
+        console.print(f"[dim]Agent done in {time.monotonic()-t0:.1f}s[/dim]")
+
+    finally:
+        # 4. Stop backend (always, even on failure)
+        console.print("\n[bold]Step 4/4:[/bold] Stopping backend server...")
+        backend.stop()
+
+    # 5. Evaluate
+    if config.evaluation.run_evaluation and predictions_path:
+        console.print("\n[bold]Evaluating predictions...[/bold]")
+        results = run_evaluation(
+            predictions_path=predictions_path,
+            run_id=run_id,
+            config=config.evaluation,
+            dataset=config.dataset,
+            output_dir=output_dir,
+        )
+        resolved, total, pct = parse_results(results)
+        console.print(
+            f"\n[bold green]Result:[/bold green] {resolved}/{total} resolved ({pct:.1f}%)"
+        )
+    elif not config.evaluation.run_evaluation:
+        console.print(f"\n[yellow]Evaluation skipped.[/yellow] Predictions: {predictions_path}")
+
+    return {
+        "run_id": run_id,
+        "name": config.name,
+        "predictions": str(predictions_path) if predictions_path else None,
+        "results": results,
+        "output_dir": str(output_dir),
+    }
+
+
+def run_pipeline(config: RunConfig) -> list[dict]:
+    """
+    Entry point for running a config (potentially a sweep).
+    Returns list of result dicts (one per sweep entry, or one for a plain run).
+    """
+    runs = expand_sweep(config)
+    all_results: list[dict] = []
+
+    for i, run_config in enumerate(runs):
+        if len(runs) > 1:
+            console.rule(f"[bold magenta]Sweep {i+1}/{len(runs)}: {run_config.name}")
+        result = run_single(run_config)
+        all_results.append(result)
+
+    if len(runs) > 1:
+        _print_sweep_summary(all_results)
+
+    return all_results
+
+
+def _print_sweep_summary(results: list[dict]) -> None:
+    console.rule("[bold]Sweep Summary")
+    table = Table(show_header=True, header_style="bold cyan")
+    table.add_column("Run", style="dim")
+    table.add_column("Resolved", justify="right")
+    table.add_column("Total", justify="right")
+    table.add_column("% Resolved", justify="right")
+
+    for r in results:
+        resolved, total, pct = parse_results(r.get("results", {}))
+        table.add_row(
+            r["name"],
+            str(resolved),
+            str(total),
+            f"{pct:.1f}%",
+        )
+
+    console.print(table)
+
+    # Save summary markdown
+    if results:
+        summary_path = Path(results[0]["output_dir"]).parent / "summary.md"
+        lines = [
+            "# Sweep Summary\n",
+            "| Run | Resolved | Total | % Resolved |",
+            "|-----|----------|-------|------------|",
+        ]
+        for r in results:
+            resolved, total, pct = parse_results(r.get("results", {}))
+            lines.append(f"| {r['name']} | {resolved} | {total} | {pct:.1f}% |")
+        summary_path.write_text("\n".join(lines) + "\n")
+        console.print(f"[dim]Summary saved to {summary_path}[/dim]")

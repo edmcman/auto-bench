@@ -1,0 +1,38 @@
+# Example: Run SWE-bench Verified with Qwen2.5 72B via vLLM (multi-GPU)
+# Usage: auto-swe-bench run configs/qwen2.5-72b-vllm.yaml
+
+name: qwen2.5-72b-instruct-vllm
+dataset: SWE-bench/SWE-bench_Verified
+
+model:
+  name: Qwen2.5-72B-Instruct
+  source: huggingface
+  repo_id: Qwen/Qwen2.5-72B-Instruct
+  # hf_token: null  # set HF_TOKEN env var for gated models
+
+backend:
+  type: vllm
+  host: 0.0.0.0
+  port: 8000
+  vllm:
+    dtype: bfloat16
+    max_model_len: 32768
+    gpu_memory_utilization: 0.92
+    tensor_parallel_size: 4    # use 4 GPUs
+    # quantization: awq        # uncomment to use AWQ-quantized variant
+    # extra_args: ["--generation-config", "vllm"]
+
+sampling:
+  temperature: 0.0
+  top_p: 1.0
+  max_tokens: 8192
+
+agent:
+  max_steps: 30
+  timeout: 300
+  workers: 4          # vLLM handles concurrent requests well
+
+evaluation:
+  run_evaluation: true
+  max_workers: 8
+  cache_level: env

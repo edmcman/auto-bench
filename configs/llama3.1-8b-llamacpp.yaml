@@ -1,0 +1,45 @@
+# Example: Run SWE-bench Verified with Llama 3.1 8B via llama.cpp
+# Usage: auto-swe-bench run configs/llama3.1-8b-llamacpp.yaml
+
+name: llama3.1-8b-Q4_K_M-llamacpp
+dataset: SWE-bench/SWE-bench_Verified
+
+# Uncomment to run only specific instances (useful for testing):
+# instance_ids:
+#   - sympy__sympy-20590
+#   - django__django-11133
+
+model:
+  name: Llama-3.1-8B-Instruct-Q4_K_M
+  source: huggingface
+  repo_id: bartowski/Meta-Llama-3.1-8B-Instruct-GGUF
+  filename: Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf
+  # hf_token: null  # set HF_TOKEN env var for gated models
+
+backend:
+  type: llamacpp
+  host: 127.0.0.1
+  port: 8080
+  llamacpp:
+    # binary: /path/to/llama-server  # defaults to PATH lookup
+    ctx_size: 32768
+    n_gpu_layers: auto   # load as many layers as fit in VRAM
+    parallel: 4          # concurrent request slots
+    flash_attn: true
+    # extra_args: ["--mlock"]
+
+sampling:
+  temperature: 0.0
+  top_p: 1.0
+  max_tokens: 4096
+
+agent:
+  max_steps: 30
+  timeout: 300
+  workers: 1          # parallel instances (increase if you have spare VRAM/RAM)
+
+evaluation:
+  run_evaluation: true
+  max_workers: 4
+  cache_level: env     # cache Docker env layer (recommended)
+  clean: false
