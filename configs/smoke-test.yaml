@@ -20,7 +20,7 @@ backend:
   host: 127.0.0.1
   port: 8080
   llamacpp:
-    ctx_size: 16384
+    ctx_size: 32768
     n_gpu_layers: auto
     parallel: 1
 

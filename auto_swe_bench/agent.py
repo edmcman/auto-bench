@@ -1,6 +1,7 @@
 """mini-SWE-agent invocation wrapper."""
 from __future__ import annotations
 
+import os
 import re
 import shutil
 import subprocess
@@ -50,14 +51,10 @@ def run_agent(config: RunConfig, backend: Backend, output_dir: Path) -> Path:
     cmd: list[str] = [
         mini_extra, "swebench",
         "--model", litellm_model,
-        "--api-base", backend.base_url,
         "--subset", subset,
+        "--split", config.split,
         "--output", str(output_dir),
         "--workers", str(config.agent.workers),
-        "--max-steps", str(config.agent.max_steps),
-        "--temperature", str(config.sampling.temperature),
-        "--top-p", str(config.sampling.top_p),
-        "--max-tokens", str(config.sampling.max_tokens),
     ]
 
     # API key (litellm requires something even for local servers)
@@ -66,7 +63,20 @@ def run_agent(config: RunConfig, backend: Backend, output_dir: Path) -> Path:
         if config.backend.type == "llamacpp"
         else config.backend.vllm.api_key
     ) or "EMPTY"
-    cmd += ["--api-key", api_key]
+
+    # Model and agent config via --config key-value pairs.
+    # Explicitly include the default config since -c disables it.
+    cmd += [
+        "-c", "swebench.yaml",
+        "-c", f"model.model_kwargs.api_base={backend.base_url}",
+        "-c", f"model.model_kwargs.api_key={api_key}",
+        "-c", f"model.model_kwargs.temperature={config.sampling.temperature}",
+        "-c", f"model.model_kwargs.top_p={config.sampling.top_p}",
+        "-c", f"model.model_kwargs.max_tokens={config.sampling.max_tokens}",
+        "-c", f"agent.max_iterations={config.agent.max_steps}",
+        "-c", "model.cost_tracking=ignore_errors",
+        "-c", "environment.pull_timeout=600",
+    ]
 
     # Instance filter: convert list of IDs to regex
     if config.instance_ids:
@@ -78,7 +88,9 @@ def run_agent(config: RunConfig, backend: Backend, output_dir: Path) -> Path:
     console.print(f"[cyan]Running mini-SWE-agent:[/cyan] predictions → {predictions_path}")
     console.print(f"[dim]{' '.join(cmd)}[/dim]")
 
-    result = subprocess.run(cmd, check=False)
+    env = os.environ.copy()
+    env.setdefault("MSWEA_MODEL_RETRY_STOP_AFTER_ATTEMPT", "5")
+    result = subprocess.run(cmd, check=False, env=env)
     if result.returncode != 0:
         console.print(f"[red]mini-swe-agent exited with code {result.returncode}[/red]")
 

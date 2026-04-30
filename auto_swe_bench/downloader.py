@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from rich.console import Console
-from rich.progress import Progress, SpinnerColumn, TextColumn
 
 console = Console()
 
@@ -20,14 +19,12 @@ def download_gguf(
     from huggingface_hub import hf_hub_download
 
     console.print(f"[cyan]Downloading GGUF:[/cyan] {repo_id}/{filename} (revision={revision})")
-    with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console) as progress:
-        progress.add_task(f"Downloading {filename}...", total=None)
-        path = hf_hub_download(
-            repo_id=repo_id,
-            filename=filename,
-            revision=revision,
-            token=token,
-        )
+    path = hf_hub_download(
+        repo_id=repo_id,
+        filename=filename,
+        revision=revision,
+        token=token,
+    )
     console.print(f"[green]Model ready:[/green] {path}")
     return path
 
@@ -46,14 +43,12 @@ def download_hf_snapshot(
     from huggingface_hub import snapshot_download
 
     console.print(f"[cyan]Downloading HF snapshot:[/cyan] {repo_id} (revision={revision})")
-    with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console) as progress:
-        progress.add_task(f"Downloading {repo_id}...", total=None)
-        path = snapshot_download(
-            repo_id=repo_id,
-            revision=revision,
-            token=token,
-            allow_patterns=allow_patterns,
-            ignore_patterns=ignore_patterns,
-        )
+    path = snapshot_download(
+        repo_id=repo_id,
+        revision=revision,
+        token=token,
+        allow_patterns=allow_patterns,
+        ignore_patterns=ignore_patterns,
+    )
     console.print(f"[green]Snapshot ready:[/green] {path}")
     return path

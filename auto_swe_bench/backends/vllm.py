@@ -9,7 +9,6 @@ from rich.console import Console
 
 from ..config import BackendConfig, ModelConfig, SamplingConfig
 from ..downloader import download_hf_snapshot
-from .base import Backend
 from .openai_backend import OpenAIBackend
 
 console = Console()
@@ -96,8 +95,13 @@ class VllmBackend(OpenAIBackend):
         self._process = None
 
     # ------------------------------------------------------------------
-    def wait_ready(self, timeout: int | None = None) -> None:
-        Backend.wait_ready(self, timeout)
+    def check_alive(self) -> None:
+        if self._process is not None and self._process.poll() is not None:
+            stdout, _ = self._process.communicate()
+            raise RuntimeError(
+                f"vllm exited with code {self._process.returncode}:\n"
+                f"{stdout.decode()[-3000:]}"
+            )
 
     # ------------------------------------------------------------------
     @property

@@ -168,6 +168,7 @@ class EvaluationConfig(BaseModel):
 class RunConfig(BaseModel):
     name: str
     dataset: str = "SWE-bench/SWE-bench_Verified"
+    split: str = "test"
     instance_ids: list[str] = Field(default_factory=list)
     output_dir: str = "results"
 

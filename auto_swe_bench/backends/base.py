@@ -41,6 +41,10 @@ class Backend(ABC):
     def model_name(self) -> str:
         """The model name string to use in API requests."""
 
+    def check_alive(self) -> None:
+        """Raise if the backend process has died (e.g. due to startup error)."""
+        pass
+
     def wait_ready(self, timeout: int | None = None) -> None:
         """Poll GET /health until 200 or timeout."""
         timeout = timeout or self.backend.startup_timeout
@@ -48,6 +52,7 @@ class Backend(ABC):
         deadline = time.monotonic() + timeout
         last_exc: Exception | None = None
         while time.monotonic() < deadline:
+            self.check_alive()
             try:
                 r = httpx.get(health_url, timeout=5)
                 if r.status_code == 200:
