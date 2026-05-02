@@ -14,6 +14,7 @@ from .backends.llamacpp import LlamaCppBackend
 from .backends.openai_backend import OpenAIBackend
 from .backends.vllm import VllmBackend
 from .config import RunConfig, expand_sweep
+from .downloader import is_gguf_cached, is_snapshot_cached, remove_from_cache
 from .evaluator import collect_harbor_results, parse_results
 
 console = Console()
@@ -28,6 +29,18 @@ def make_backend(config: RunConfig) -> Backend:
         return OpenAIBackend(config.model, config.backend, config.sampling, config.backend_options)
     else:
         raise ValueError(f"Unknown backend type: {config.backend.type}")
+
+
+def _is_model_cached(config: RunConfig) -> bool:
+    """Check whether the model in *config* is already in the local HF cache."""
+    model = config.model
+    if model.source == "local":
+        return True  # local models are never removed
+    if config.backend.type == "llamacpp":
+        return is_gguf_cached(model.repo_id, model.filename, model.revision)
+    elif config.backend.type == "vllm":
+        return is_snapshot_cached(model.repo_id, model.revision)
+    return True  # openai: no local model
 
 
 def serve_model(config: RunConfig, dry_run: bool = False) -> None:
@@ -48,6 +61,8 @@ def serve_model(config: RunConfig, dry_run: bool = False) -> None:
 
     console.rule(f"[bold blue]Serve: {run_id}")
     backend = make_backend(config)
+
+    was_cached = _is_model_cached(config) if config.remove_downloaded_models else True
 
     console.print("\n[bold]Step 1/3:[/bold] Downloading model...")
     t0 = time.monotonic()
@@ -74,12 +89,15 @@ def serve_model(config: RunConfig, dry_run: bool = False) -> None:
             f"\n[bold green]Server is running.[/bold green] Press Ctrl+C to stop.\n"
         )
         while True:
-            time.sleep(1)
+            backend.check_alive()
+            time.sleep(2)
     except KeyboardInterrupt:
         console.print("\n[yellow]Received interrupt, shutting down...[/yellow]")
     finally:
         backend.stop()
         console.print("[green]Server stopped.[/green]")
+        if config.remove_downloaded_models and not was_cached:
+            remove_from_cache(model_path)
 
 
 def run_single(config: RunConfig) -> dict:
@@ -95,6 +113,8 @@ def run_single(config: RunConfig) -> dict:
     console.rule(f"[bold blue]Run: {run_id}")
 
     backend = make_backend(config)
+
+    was_cached = _is_model_cached(config) if config.remove_downloaded_models else True
 
     # 1. Download model
     console.print("\n[bold]Step 1/4:[/bold] Downloading model...")
@@ -123,6 +143,8 @@ def run_single(config: RunConfig) -> dict:
         # 4. Stop backend (always, even on failure)
         console.print("\n[bold]Step 4/4:[/bold] Stopping backend server...")
         backend.stop()
+        if config.remove_downloaded_models and not was_cached:
+            remove_from_cache(model_path)
 
     # 5. Evaluate
     if config.evaluation.run_evaluation and agent_output:

@@ -64,6 +64,7 @@ class LlamaCppConfig(BaseModel):
     binary: str = "llama-server"
     n_gpu_layers: int | str = "auto"
     parallel: int = 1
+    auto_fit: bool = True
     extra_args: list[str] = Field(default_factory=list)
 
 

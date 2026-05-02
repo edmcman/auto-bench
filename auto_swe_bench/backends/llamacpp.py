@@ -73,6 +73,9 @@ class LlamaCppBackend(OpenAIBackend):
         else:
             cmd += ["--n-gpu-layers", str(ngl)]
 
+        if cfg.auto_fit:
+            cmd += ["--fit", "on"]
+
         cmd.extend(cfg.extra_args)
         return cmd
 

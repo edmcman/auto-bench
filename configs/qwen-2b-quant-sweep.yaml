@@ -72,5 +72,7 @@ agent:
   limit: 1
   setup_multiplier: 10.0
 
+remove_downloaded_models: true
+
 evaluation:
   run_evaluation: true

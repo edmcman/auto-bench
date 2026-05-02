@@ -25,9 +25,6 @@ class OpenAIBackend(Backend):
     def stop(self) -> None:
         pass
 
-    def wait_ready(self, timeout: int | None = None) -> None:
-        pass
-
     @property
     def model_name(self) -> str:
         return self.backend.openai.model or self.model.effective_name()

@@ -1,9 +1,52 @@
 """Model download helpers using huggingface_hub."""
 from __future__ import annotations
 
+from pathlib import Path
+
 from rich.console import Console
 
 console = Console()
+
+
+def is_gguf_cached(repo_id: str, filename: str, revision: str = "main") -> bool:
+    """Return True if the GGUF file is already in the local HF cache."""
+    from huggingface_hub import try_to_load_from_cache
+
+    result = try_to_load_from_cache(repo_id, filename, revision=revision)
+    return isinstance(result, str)
+
+
+def is_snapshot_cached(repo_id: str, revision: str = "main") -> bool:
+    """Return True if the HF repo snapshot is already in the local cache."""
+    from huggingface_hub import scan_cache_dir
+
+    cache = scan_cache_dir()
+    for repo in cache.repos:
+        if repo.repo_id == repo_id and repo.repo_type == "model":
+            return True
+    return False
+
+
+def remove_from_cache(model_path: str) -> None:
+    """Remove a model from the HF cache given its snapshot path."""
+    from huggingface_hub import scan_cache_dir
+
+    # Extract revision hash from path like .../snapshots/<HASH>/...
+    parts = Path(model_path).parts
+    try:
+        idx = parts.index("snapshots")
+        revision_hash = parts[idx + 1]
+    except (ValueError, IndexError):
+        console.print(f"[yellow]Cannot parse revision hash from path: {model_path}[/yellow]")
+        return
+
+    try:
+        strategy = scan_cache_dir().delete_revisions(revision_hash)
+        console.print(f"[cyan]Removing downloaded model:[/cyan] {model_path}")
+        strategy.execute()
+        console.print(f"[green]Freed {strategy.expected_freed_size_str}[/green]")
+    except Exception as exc:
+        console.print(f"[yellow]Failed to remove cached model {model_path}: {exc}[/yellow]")
 
 
 def download_gguf(
