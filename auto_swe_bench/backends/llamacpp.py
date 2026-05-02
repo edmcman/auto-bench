@@ -67,14 +67,10 @@ class LlamaCppBackend(OpenAIBackend):
 
         cmd += ["--ctx-size", str(self.backend_options.ctx_size or 0)]
 
-        ngl = cfg.n_gpu_layers
-        if str(ngl).lower() in ("auto", "all"):
-            cmd += ["--n-gpu-layers", "999"]
-        else:
-            cmd += ["--n-gpu-layers", str(ngl)]
-
         if cfg.auto_fit:
             cmd += ["--fit", "on"]
+        else:
+            cmd += ["--n-gpu-layers", str(cfg.n_gpu_layers)]
 
         cmd.extend(cfg.extra_args)
         return cmd
