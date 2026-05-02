@@ -119,8 +119,8 @@ class LlamaCppBackend(OpenAIBackend):
     # ------------------------------------------------------------------
     @property
     def model_name(self) -> str:
-        if self.model.name:
-            return self.model.name
         if self.model.filename:
             return Path(self.model.filename).stem
+        if self.model.name:
+            return self.model.name
         return self.model.effective_name()
