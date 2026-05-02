@@ -61,7 +61,7 @@ class ModelConfig(BaseModel):
 
 class LlamaCppConfig(BaseModel):
     binary: str = "llama-server"
-    ctx_size: int = -1
+    ctx_size: int = 0
     n_gpu_layers: int | str = "auto"
     parallel: int = 1
     extra_args: list[str] = Field(default_factory=list)
