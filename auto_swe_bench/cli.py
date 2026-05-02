@@ -113,6 +113,30 @@ def validate(
         console.print(f"  * {r.name}  backend={r.backend.type}  model={r.model.effective_name()}")
 
 
+@app.command()
+def serve(
+    config: Path = typer.Argument(..., help="Path to experiment config YAML", exists=True),
+    local: Path = typer.Option(
+        None, "--local", "-l",
+        help="Path to local config (default: ~/.config/auto-swe-bench/local.yaml)",
+    ),
+):
+    """Download model and start the backend server. Runs until Ctrl+C."""
+    from .config import expand_sweep
+    from .runner import serve_model
+
+    cfg = _load_configs(config, local)
+    runs = expand_sweep(cfg)
+
+    if len(runs) > 1:
+        console.print(
+            f"[yellow]Sweep config with {len(runs)} entries detected. "
+            f"Serving only the first: [bold]{runs[0].name}[/bold][/yellow]"
+        )
+
+    serve_model(runs[0])
+
+
 def main():
     app()
 

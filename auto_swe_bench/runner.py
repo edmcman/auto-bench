@@ -30,6 +30,49 @@ def make_backend(config: RunConfig) -> Backend:
         raise ValueError(f"Unknown backend type: {config.backend.type}")
 
 
+def serve_model(config: RunConfig) -> None:
+    """Download model, start backend server, print URL, and block until Ctrl+C."""
+    if config.backend.type == "openai":
+        console.print(
+            "[yellow]Backend type is 'openai' -- this is an external server. "
+            "Nothing to start locally.[/yellow]"
+        )
+        return
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    run_id = f"{config.name}_{timestamp}"
+    output_dir = Path(config.output_dir) / run_id
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    console.rule(f"[bold blue]Serve: {run_id}")
+    backend = make_backend(config)
+
+    console.print("\n[bold]Step 1/3:[/bold] Downloading model...")
+    t0 = time.monotonic()
+    model_path = backend.download()
+    console.print(f"[dim]Download done in {time.monotonic() - t0:.1f}s[/dim]")
+
+    console.print("\n[bold]Step 2/3:[/bold] Starting backend server...")
+    t0 = time.monotonic()
+    backend.start(model_path, output_dir=output_dir)
+
+    try:
+        backend.wait_ready()
+        console.print(
+            f"[green]Backend ready[/green] in {time.monotonic() - t0:.1f}s — {backend.base_url}"
+        )
+        console.print(
+            f"\n[bold green]Server is running.[/bold green] Press Ctrl+C to stop.\n"
+        )
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Received interrupt, shutting down...[/yellow]")
+    finally:
+        backend.stop()
+        console.print("[green]Server stopped.[/green]")
+
+
 def run_single(config: RunConfig) -> dict:
     """
     Run a single (non-sweep) pipeline: download → start → agent → stop → evaluate.
