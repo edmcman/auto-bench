@@ -39,14 +39,11 @@ def _docker_base_url(base_url: str, gateway: str) -> str:
 
 
 def _get_api_key(config: RunConfig) -> str:
-    key = None
-    if config.backend.type == "llamacpp":
-        key = config.backend.llamacpp.api_key
-    elif config.backend.type == "vllm":
-        key = config.backend.vllm.api_key
-    elif config.backend.type == "openai":
-        key = config.backend.openai.api_key
-    return key or "EMPTY"
+    if config.backend.type == "vllm":
+        return config.backend.vllm.api_key or "EMPTY"
+    if config.backend.type == "openai":
+        return config.backend.openai.api_key or "EMPTY"
+    return "EMPTY"
 
 
 def run_agent(config: RunConfig, backend: Backend, output_dir: Path) -> Path:

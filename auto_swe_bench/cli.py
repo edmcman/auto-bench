@@ -1,9 +1,7 @@
 """CLI entry point for auto-swe-bench."""
 from __future__ import annotations
 
-import sys
 from pathlib import Path
-from typing import Optional
 
 import typer
 from rich.console import Console
@@ -57,28 +55,6 @@ def download(
         console.print(f"\n[cyan]Downloading model for:[/cyan] {run_cfg.name}")
         path = backend.download()
         console.print(f"[green]Ready:[/green] {path}")
-
-
-@app.command()
-def evaluate(
-    config: Path = typer.Argument(..., help="Path to YAML config file", exists=True),
-    predictions: Path = typer.Argument(..., help="Path to predictions.jsonl", exists=True),
-    run_id: Optional[str] = typer.Option(None, "--run-id", help="Run ID for output naming"),
-):
-    """Run only the SWE-bench evaluation harness on an existing predictions file."""
-    from .evaluator import parse_results, run_evaluation
-
-    cfg = _load(config)
-    rid = run_id or predictions.stem
-    results = run_evaluation(
-        predictions_path=predictions,
-        run_id=rid,
-        config=cfg.evaluation,
-        dataset=cfg.dataset,
-        output_dir=predictions.parent,
-    )
-    resolved, total, pct = parse_results(results)
-    console.print(f"\n[bold green]Result:[/bold green] {resolved}/{total} resolved ({pct:.1f}%)")
 
 
 @app.command()

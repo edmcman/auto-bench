@@ -1,7 +1,6 @@
 """Pydantic config schema for auto-swe-bench YAML configs."""
 from __future__ import annotations
 
-import platform
 from pathlib import Path
 from typing import Any, Literal
 
@@ -63,16 +62,9 @@ class ModelConfig(BaseModel):
 
 class LlamaCppConfig(BaseModel):
     binary: str = "llama-server"
-    ctx_size: int = 32768
-    n_gpu_layers: int | str = "auto"  # int, "auto", or "all"
-    parallel: int = 4
-    batch_size: int = 2048
-    ubatch_size: int = 512
-    flash_attn: bool | str = "auto"
-    threads: int = -1
-    api_key: str | None = None
-    mlock: bool = False
-    no_mmap: bool = False
+    ctx_size: int = -1
+    n_gpu_layers: int | str = "auto"
+    parallel: int = 1
     extra_args: list[str] = Field(default_factory=list)
 
 
@@ -158,16 +150,6 @@ class AgentConfig(BaseModel):
 
 class EvaluationConfig(BaseModel):
     run_evaluation: bool = True
-    max_workers: int = 4
-    cache_level: Literal["none", "base", "env", "instance"] = "env"
-    clean: bool = False
-    # Force --namespace '' for ARM/Apple Silicon (auto-detected if None)
-    force_local_build: bool | None = None
-
-    def needs_local_build(self) -> bool:
-        if self.force_local_build is not None:
-            return self.force_local_build
-        return platform.machine() in ("arm64", "aarch64")
 
 
 # ---------------------------------------------------------------------------

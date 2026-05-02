@@ -8,10 +8,10 @@ instance_ids:
   - sympy__sympy-22914
 
 model:
-  name: Qwen3.5-4B-UD-Q5_K_XL
+  name: Qwen3.5-2B-UD-Q5_K_XL
   source: huggingface
-  repo_id: unsloth/Qwen3.5-4B-GGUF
-  filename: Qwen3.5-4B-UD-Q5_K_XL.gguf
+  repo_id: unsloth/Qwen3.5-2B-GGUF
+  filename: Qwen3.5-2B-UD-Q5_K_XL.gguf
 
 backend:
   type: llamacpp
@@ -22,8 +22,6 @@ backend:
   llamacpp:
     ctx_size: 262144
     n_gpu_layers: auto
-    parallel: 1
-    extra_args: []
 
 # Sampling settings (documented here; Harbor uses model defaults)
 sampling:

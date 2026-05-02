@@ -61,43 +61,17 @@ class LlamaCppBackend(OpenAIBackend):
             "--model", model_path,
             "--host", self.backend.host,
             "--port", str(self.backend.effective_port()),
-            "--ctx-size", str(cfg.ctx_size),
             "--parallel", str(cfg.parallel),
-            "--batch-size", str(cfg.batch_size),
-            "--ubatch-size", str(cfg.ubatch_size),
+            "--alias", self.model_name,
         ]
 
-        # GPU layers
+        cmd += ["--ctx-size", str(cfg.ctx_size)]
+
         ngl = cfg.n_gpu_layers
-        if str(ngl).lower() == "auto":
-            cmd += ["--n-gpu-layers", "999"]  # load as many as fit
-        elif str(ngl).lower() == "all":
+        if str(ngl).lower() in ("auto", "all"):
             cmd += ["--n-gpu-layers", "999"]
         else:
             cmd += ["--n-gpu-layers", str(ngl)]
-
-        # Flash attention
-        fa = str(cfg.flash_attn).lower()
-        if fa in ("true", "1", "on", "auto"):
-            cmd += ["--flash-attn", fa]
-        elif fa not in ("false", "0", "off"):
-            cmd += ["--flash-attn", fa]
-
-        # Threads
-        if cfg.threads > 0:
-            cmd += ["--threads", str(cfg.threads)]
-
-        # API key
-        if cfg.api_key:
-            cmd += ["--api-key", cfg.api_key]
-
-        # Alias (model name used in API)
-        cmd += ["--alias", self.model_name]
-
-        if cfg.mlock:
-            cmd.append("--mlock")
-        if cfg.no_mmap:
-            cmd.append("--no-mmap")
 
         cmd.extend(cfg.extra_args)
 

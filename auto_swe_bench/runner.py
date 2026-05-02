@@ -14,7 +14,7 @@ from .backends.llamacpp import LlamaCppBackend
 from .backends.openai_backend import OpenAIBackend
 from .backends.vllm import VllmBackend
 from .config import RunConfig, expand_sweep
-from .evaluator import collect_harbor_results, parse_results, run_evaluation
+from .evaluator import collect_harbor_results, parse_results
 
 console = Console()
 
