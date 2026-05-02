@@ -17,6 +17,7 @@ class SweepEntry(BaseModel):
     label: str
     filename: str | None = None
     sampling: SamplingConfig | None = None
+    overrides: dict[str, Any] = Field(default_factory=dict)
 
 
 class ModelConfig(BaseModel):
@@ -61,7 +62,6 @@ class ModelConfig(BaseModel):
 
 class LlamaCppConfig(BaseModel):
     binary: str = "llama-server"
-    ctx_size: int = 0
     n_gpu_layers: int | str = "auto"
     parallel: int = 1
     extra_args: list[str] = Field(default_factory=list)
@@ -69,7 +69,6 @@ class LlamaCppConfig(BaseModel):
 
 class VllmConfig(BaseModel):
     dtype: str = "auto"
-    max_model_len: int | None = None
     gpu_memory_utilization: float = 0.9
     tensor_parallel_size: int = 1
     pipeline_parallel_size: int = 1
@@ -170,6 +169,7 @@ class RunConfig(BaseModel):
 
     model: ModelConfig
     backend: BackendConfig
+    backend_options: BackendOptions = Field(default_factory=BackendOptions)
     sampling: SamplingConfig = Field(default_factory=SamplingConfig)
     agent: AgentConfig = Field(default_factory=AgentConfig)
     evaluation: EvaluationConfig = Field(default_factory=EvaluationConfig)
@@ -210,11 +210,8 @@ def merge_configs(experiment: ExperimentConfig, local: LocalConfig) -> RunConfig
     """Combine experiment and local config into a unified RunConfig."""
     data = experiment.model_dump()
     llamacpp_data = local.llamacpp.model_dump() if local.llamacpp else {}
-    if experiment.backend_options.ctx_size is not None:
-        llamacpp_data["ctx_size"] = experiment.backend_options.ctx_size
     vllm_data = local.vllm.model_dump() if local.vllm else {}
-    if experiment.backend_options.max_model_len is not None:
-        vllm_data["max_model_len"] = experiment.backend_options.max_model_len
+    data["backend_options"] = experiment.backend_options.model_dump()
     data["backend"] = {
         "type": experiment.backend_type,
         "host": local.host,
@@ -237,6 +234,15 @@ def load_config(path: str | Path) -> RunConfig:
     return RunConfig.model_validate(data)
 
 
+def deep_merge(base: dict, overrides: dict) -> None:
+    """Recursively merge *overrides* into *base* (mutates base)."""
+    for key, value in overrides.items():
+        if key in base and isinstance(base[key], dict) and isinstance(value, dict):
+            deep_merge(base[key], value)
+        else:
+            base[key] = value
+
+
 def expand_sweep(config: RunConfig) -> list[RunConfig]:
     """
     If config.model.sweep is set, return one RunConfig per sweep entry
@@ -254,12 +260,14 @@ def expand_sweep(config: RunConfig) -> list[RunConfig]:
         # Apply sweep entry fields
         data["name"] = f"{config.name}-{entry.label}"
         data["model"]["filename"] = entry.filename or config.model.filename
-        data["model"]["name"] = entry.label
         # Remove sweep to avoid infinite recursion
         data["model"]["sweep"] = None
 
         if entry.sampling:
             data["sampling"] = {**data["sampling"], **entry.sampling.model_dump(exclude_none=True)}
+
+        if entry.overrides:
+            deep_merge(data, entry.overrides)
 
         runs.append(RunConfig.model_validate(data))
 

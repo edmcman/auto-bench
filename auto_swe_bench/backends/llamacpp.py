@@ -9,7 +9,7 @@ from pathlib import Path
 
 from rich.console import Console
 
-from ..config import BackendConfig, ModelConfig, SamplingConfig
+from ..config import BackendConfig, BackendOptions, ModelConfig, SamplingConfig
 from ..downloader import download_gguf
 from .openai_backend import OpenAIBackend
 
@@ -17,8 +17,8 @@ console = Console()
 
 
 class LlamaCppBackend(OpenAIBackend):
-    def __init__(self, model: ModelConfig, backend: BackendConfig, sampling: SamplingConfig) -> None:
-        super().__init__(model, backend, sampling)
+    def __init__(self, model: ModelConfig, backend: BackendConfig, sampling: SamplingConfig, backend_options: BackendOptions | None = None) -> None:
+        super().__init__(model, backend, sampling, backend_options)
         self._process: subprocess.Popen | None = None
         self._model_path: str | None = None
         self._log_path: Path | None = None
@@ -65,7 +65,7 @@ class LlamaCppBackend(OpenAIBackend):
             "--alias", self.model_name,
         ]
 
-        cmd += ["--ctx-size", str(cfg.ctx_size)]
+        cmd += ["--ctx-size", str(self.backend_options.ctx_size or 0)]
 
         ngl = cfg.n_gpu_layers
         if str(ngl).lower() in ("auto", "all"):

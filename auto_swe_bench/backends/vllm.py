@@ -8,7 +8,7 @@ from pathlib import Path
 
 from rich.console import Console
 
-from ..config import BackendConfig, ModelConfig, SamplingConfig
+from ..config import BackendConfig, BackendOptions, ModelConfig, SamplingConfig
 from ..downloader import download_hf_snapshot
 from .openai_backend import OpenAIBackend
 
@@ -16,8 +16,8 @@ console = Console()
 
 
 class VllmBackend(OpenAIBackend):
-    def __init__(self, model: ModelConfig, backend: BackendConfig, sampling: SamplingConfig) -> None:
-        super().__init__(model, backend, sampling)
+    def __init__(self, model: ModelConfig, backend: BackendConfig, sampling: SamplingConfig, backend_options: BackendOptions | None = None) -> None:
+        super().__init__(model, backend, sampling, backend_options)
         self._process: subprocess.Popen | None = None
         self._log_path: Path | None = None
 
@@ -61,8 +61,8 @@ class VllmBackend(OpenAIBackend):
             "--pipeline-parallel-size", str(cfg.pipeline_parallel_size),
         ]
 
-        if cfg.max_model_len:
-            cmd += ["--max-model-len", str(cfg.max_model_len)]
+        if self.backend_options.max_model_len:
+            cmd += ["--max-model-len", str(self.backend_options.max_model_len)]
         if cfg.quantization:
             cmd += ["--quantization", cfg.quantization]
         if cfg.enforce_eager:

@@ -21,11 +21,11 @@ console = Console()
 
 def make_backend(config: RunConfig) -> Backend:
     if config.backend.type == "llamacpp":
-        return LlamaCppBackend(config.model, config.backend, config.sampling)
+        return LlamaCppBackend(config.model, config.backend, config.sampling, config.backend_options)
     elif config.backend.type == "vllm":
-        return VllmBackend(config.model, config.backend, config.sampling)
+        return VllmBackend(config.model, config.backend, config.sampling, config.backend_options)
     elif config.backend.type == "openai":
-        return OpenAIBackend(config.model, config.backend, config.sampling)
+        return OpenAIBackend(config.model, config.backend, config.sampling, config.backend_options)
     else:
         raise ValueError(f"Unknown backend type: {config.backend.type}")
 
@@ -151,6 +151,13 @@ def run_pipeline(config: RunConfig) -> list[dict]:
     """
     runs = expand_sweep(config)
     all_results: list[dict] = []
+
+    if len(runs) > 1:
+        sweep_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        sweep_dir = Path(config.output_dir) / f"sweep_{sweep_timestamp}"
+        sweep_dir.mkdir(parents=True, exist_ok=True)
+        for run_config in runs:
+            run_config.output_dir = str(sweep_dir)
 
     for i, run_config in enumerate(runs):
         if len(runs) > 1:

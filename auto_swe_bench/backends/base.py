@@ -7,16 +7,17 @@ from pathlib import Path
 
 import httpx
 
-from ..config import BackendConfig, ModelConfig, SamplingConfig
+from ..config import BackendConfig, BackendOptions, ModelConfig, SamplingConfig
 
 
 class Backend(ABC):
     """Abstract interface for a local LLM server backend."""
 
-    def __init__(self, model: ModelConfig, backend: BackendConfig, sampling: SamplingConfig) -> None:
+    def __init__(self, model: ModelConfig, backend: BackendConfig, sampling: SamplingConfig, backend_options: BackendOptions | None = None) -> None:
         self.model = model
         self.backend = backend
         self.sampling = sampling
+        self.backend_options = backend_options or BackendOptions()
 
     @abstractmethod
     def download(self) -> str:
