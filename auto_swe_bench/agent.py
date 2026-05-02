@@ -70,7 +70,7 @@ def run_agent(config: RunConfig, backend: Backend, output_dir: Path) -> Path:
         "--env", agent_cfg.env,
         "-k", str(agent_cfg.attempts),
         "-n", str(agent_cfg.trials),
-        "--agent-setup-multiplier", str(agent_cfg.setup_multiplier),
+        "--agent-setup-timeout-multiplier", str(agent_cfg.setup_multiplier),
     ]
 
     if agent_cfg.limit is not None:

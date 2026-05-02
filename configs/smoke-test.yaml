@@ -5,7 +5,7 @@ name: smoke-test
 dataset: SWE-bench/SWE-bench_Verified
 
 instance_ids:
-  - sympy__sympy-22914
+  - swe-bench/sympy__sympy-22914
 
 model:
   name: Qwen3.5-2B-UD-Q5_K_XL
@@ -17,8 +17,6 @@ backend:
   type: llamacpp
   host: 127.0.0.1
   port: 8080
-  # Use host.docker.internal on macOS/Docker Desktop
-  docker_gateway: "172.17.0.1"
   llamacpp:
     ctx_size: 262144
     n_gpu_layers: auto
