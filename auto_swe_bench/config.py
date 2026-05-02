@@ -16,9 +16,7 @@ class SweepEntry(BaseModel):
     """One entry in a quantization / parameter sweep."""
     label: str
     filename: str | None = None
-    # Allow overriding any sampling or backend fields per sweep entry
     sampling: SamplingConfig | None = None
-    backend: BackendConfig | None = None
 
 
 class ModelConfig(BaseModel):
@@ -33,7 +31,6 @@ class ModelConfig(BaseModel):
     revision: str = "main"
     # For local source: path to model file or directory
     local_path: str | None = None
-    hf_token: str | None = None
     # vLLM: filter which files to download
     allow_patterns: list[str] | None = None
     ignore_patterns: list[str] | None = None
@@ -170,6 +167,54 @@ class RunConfig(BaseModel):
     evaluation: EvaluationConfig = Field(default_factory=EvaluationConfig)
 
 
+# ---------------------------------------------------------------------------
+# File-format models (what user writes vs merged internal representation)
+# ---------------------------------------------------------------------------
+
+class ExperimentConfig(BaseModel):
+    """Portable experiment description: what to run."""
+    name: str
+    dataset: str = "SWE-bench/SWE-bench_Verified"
+    split: str = "test"
+    instance_ids: list[str] = Field(default_factory=list)
+    output_dir: str = "results"
+    backend_type: Literal["llamacpp", "vllm", "openai"]
+    model: ModelConfig
+    sampling: SamplingConfig = Field(default_factory=SamplingConfig)
+    agent: AgentConfig = Field(default_factory=AgentConfig)
+    evaluation: EvaluationConfig = Field(default_factory=EvaluationConfig)
+
+
+class LocalConfig(BaseModel):
+    """Machine-specific settings: how to run each backend."""
+    host: str = "127.0.0.1"
+    port: int | None = None
+    startup_timeout: int = 300
+    docker_gateway: str = "172.17.0.1"
+    hf_token: str | None = None
+    llamacpp: LlamaCppConfig | None = None
+    vllm: VllmConfig | None = None
+    openai: OpenAIConfig | None = None
+
+
+def merge_configs(experiment: ExperimentConfig, local: LocalConfig) -> RunConfig:
+    """Combine experiment and local config into a unified RunConfig."""
+    data = experiment.model_dump()
+    data["backend"] = {
+        "type": experiment.backend_type,
+        "host": local.host,
+        "port": local.port,
+        "startup_timeout": local.startup_timeout,
+        "docker_gateway": local.docker_gateway,
+        "llamacpp": local.llamacpp.model_dump() if local.llamacpp else {},
+        "vllm": local.vllm.model_dump() if local.vllm else {},
+        "openai": local.openai.model_dump() if local.openai else {},
+    }
+    if local.hf_token:
+        data["model"]["hf_token"] = local.hf_token
+    return RunConfig.model_validate(data)
+
+
 def load_config(path: str | Path) -> RunConfig:
     """Load and validate a YAML config file."""
     with open(path) as f:
@@ -200,8 +245,6 @@ def expand_sweep(config: RunConfig) -> list[RunConfig]:
 
         if entry.sampling:
             data["sampling"] = {**data["sampling"], **entry.sampling.model_dump(exclude_none=True)}
-        if entry.backend:
-            data["backend"] = {**data["backend"], **entry.backend.model_dump(exclude_none=True)}
 
         runs.append(RunConfig.model_validate(data))
 

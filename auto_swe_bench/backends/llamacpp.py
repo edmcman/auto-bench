@@ -1,6 +1,7 @@
 """llama.cpp server backend."""
 from __future__ import annotations
 
+import shlex
 import shutil
 import signal
 import subprocess
@@ -46,18 +47,18 @@ class LlamaCppBackend(OpenAIBackend):
         self._model_path = model_path
         cfg = self.backend.llamacpp
 
-        binary = cfg.binary
-        if not Path(binary).is_absolute():
-            resolved = shutil.which(binary)
+        binary_parts = shlex.split(cfg.binary)
+        binary_name = binary_parts[0]
+        if not Path(binary_name).is_absolute():
+            resolved = shutil.which(binary_name)
             if resolved is None:
                 raise FileNotFoundError(
-                    f"llama-server binary '{binary}' not found in PATH. "
-                    "Build llama.cpp or set backend.llamacpp.binary to the full path."
+                    f"Command '{binary_name}' not found in PATH. "
+                    "Set backend.llamacpp.binary to a full path or compound command."
                 )
-            binary = resolved
+            binary_parts[0] = resolved
 
-        cmd: list[str] = [
-            binary,
+        cmd: list[str] = binary_parts + [
             "--model", model_path,
             "--host", self.backend.host,
             "--port", str(self.backend.effective_port()),

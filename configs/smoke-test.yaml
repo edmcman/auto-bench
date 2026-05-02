@@ -2,6 +2,7 @@
 # Usage: auto-swe-bench run configs/smoke-test.yaml
 
 name: smoke-test
+backend_type: llamacpp
 dataset: SWE-bench/SWE-bench_Verified
 
 instance_ids:
@@ -13,15 +14,6 @@ model:
   repo_id: unsloth/Qwen3.5-2B-GGUF
   filename: Qwen3.5-2B-UD-Q5_K_XL.gguf
 
-backend:
-  type: llamacpp
-  host: 127.0.0.1
-  port: 8080
-  llamacpp:
-    ctx_size: 262144
-    n_gpu_layers: auto
-
-# Sampling settings (documented here; Harbor uses model defaults)
 sampling:
   temperature: 0.7
   top_p: 0.8
@@ -31,10 +23,9 @@ sampling:
 agent:
   agent: openhands
   env: docker
-  attempts: 1       # -k: attempts per instance
-  limit: 1          # -l: max instances from dataset
+  attempts: 1
+  limit: 1
   setup_multiplier: 10.0
-  # agent_kwargs for openhands (version, python_version) are auto-injected
 
 evaluation:
   run_evaluation: true
