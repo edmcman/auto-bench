@@ -7,22 +7,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **auto-swe-bench** orchestrates fully-automated SWE-bench runs against locally-hosted LLMs. The pipeline is:
 
 ```
-YAML config → download model → start backend server → run mini-SWE-agent → evaluate → results
+YAML config → download model → start backend server → run Harbor agent → collect results
 ```
 
-It shells out to three external tools: `llama-server` or `vllm serve` (inference), `mini-extra swebench` (the agent), and `python -m swebench.harness.run_evaluation` (scoring).
+It shells out to two external tools: `llama-server` or `vllm serve` (inference) and `uvx harbor run` (agent + evaluation). `uv` must be installed separately for `uvx` to work.
 
 ## Setup & Commands
 
 ```bash
-uv sync                                      # install dependencies
-auto-swe-bench validate configs/smoke-test.yaml   # validate config
-auto-swe-bench download configs/smoke-test.yaml   # download model only
-auto-swe-bench run configs/smoke-test.yaml        # full pipeline
-auto-swe-bench evaluate <config> <preds.jsonl>    # evaluate predictions only
+uv sync                                                # install dependencies
+uv run auto-swe-bench validate configs/smoke-test.yaml # validate config
+uv run auto-swe-bench download configs/smoke-test.yaml # download model only
+uv run auto-swe-bench run configs/smoke-test.yaml      # full pipeline
+uv run auto-swe-bench evaluate <config> <preds.jsonl>  # evaluate predictions only
 ```
 
-There is no test suite. `configs/smoke-test.yaml` (3 instances, no evaluation) is the standard quick check.
+There is no test suite. `configs/smoke-test.yaml` (1 instance) is the standard quick check.
 
 ## Architecture
 
@@ -39,19 +39,28 @@ Backend (ABC)
 └── VllmBackend        — downloads an HF snapshot, launches vllm subprocess
 ```
 
-All backends ultimately expose an OpenAI-compatible `/v1/chat/completions` endpoint. `agent.py` addresses it as `openai/{backend.model_name}` via litellm. `Backend.wait_ready()` polls `/health`; subclasses override `check_alive()` to fail fast if the subprocess dies before the server is up.
+All backends expose an OpenAI-compatible `/v1/chat/completions` endpoint on `host:port`. `Backend.wait_ready()` polls `/health`; subclasses override `check_alive()` to fail fast if the subprocess dies before the server is up.
 
 ### Agent Invocation (`agent.py`)
 
-Builds and runs a `mini-extra swebench` command. Model/sampling parameters are passed as `-c key=value` config overrides (not CLI flags). The split, subset, instance filter (as regex), and worker count come from `RunConfig`. Output predictions land in a timestamped subdirectory of the output dir; `find_predictions()` searches for `preds.json` recursively.
+Builds and runs `uvx harbor run`. Harbor runs the agent (e.g. OpenHands) inside Docker containers; the container reaches the local inference server via `backend.docker_gateway` (default `172.17.0.1`; use `host.docker.internal` on macOS/Docker Desktop). Harbor's output lands in a `jobs/` directory under the run's output dir.
+
+Harbor flag mapping from `AgentConfig`:
+- `attempts` → `-k` (attempts per instance)
+- `limit` → `-l` (max instances from dataset)
+- `trials` → `-n`
+- `setup_multiplier` → `--agent-setup-multiplier`
+- `agent_kwargs` → `--ak` (repeated); openhands `version`/`python_version` are auto-injected
+- `agent_env` → `--ae` (repeated; `OPENAI_BASE_URL` and `OPENAI_API_KEY` also auto-injected)
 
 ### Evaluation (`evaluator.py`)
 
-Shells out to `swebench.harness.run_evaluation`. On ARM/Apple Silicon, `force_local_build` is auto-detected to trigger local Docker image builds. `parse_results()` reads the resulting JSON to extract resolved/total/%.
+`collect_harbor_results(jobs_dir)` walks `jobs/*/verifier/reward.txt` files produced by Harbor (each contains `"0"` or `"1"`) to compute resolved/total counts. `parse_results()` extracts the (resolved, total, pct) tuple.
 
 ## Key Design Points
 
 - **Sweep mode**: A single YAML with `model.sweep` produces a comparison table written to `results/summary.md`. Each sweep entry can override `filename`, `local_path`, `quantization`, and other model-level fields.
 - **No-op OpenAI backend**: `type: openai` skips download/start/stop entirely and points directly at an already-running server. Useful for remote APIs or pre-started local servers.
 - **Flash attention flag**: The `flash_attn` field in `LlamaCppConfig` accepts `true/false/auto/on/off/0/1`; the backend maps these to `--flash-attn <value>`.
-- **Retry limit**: `MSWEA_MODEL_RETRY_STOP_AFTER_ATTEMPT=5` is injected into the agent subprocess environment to cap retries on inference failures.
+- **Docker gateway**: Set `backend.docker_gateway` to the IP/hostname Docker containers use to reach the host. Default `172.17.0.1` works on Linux. On macOS with Docker Desktop use `host.docker.internal`.
+- **OpenHands --ak defaults**: `version="0.57.0"` and `python_version="3.12"` are automatically prepended to `--ak` for OpenHands as a workaround for a Harbor bug, unless already specified in `agent_kwargs`.

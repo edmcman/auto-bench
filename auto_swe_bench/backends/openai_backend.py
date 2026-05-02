@@ -1,6 +1,8 @@
 """OpenAI-compatible API backend (connects to a pre-running remote server)."""
 from __future__ import annotations
 
+from pathlib import Path
+
 from .base import Backend
 
 
@@ -14,7 +16,7 @@ class OpenAIBackend(Backend):
     def download(self) -> str:
         return ""
 
-    def start(self, model_path: str) -> None:
+    def start(self, model_path: str, output_dir: Path | None = None) -> None:
         pass
 
     def stop(self) -> None:

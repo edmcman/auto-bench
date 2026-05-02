@@ -15,8 +15,8 @@ dependencies = [
     "httpx>=0.27",
     "huggingface-hub>=0.23",
     "rich>=13.0",
-    "mini-swe-agent>=2.0",
     "swebench>=3.0",
+    # Harbor is invoked via `uvx harbor run` (uv must be installed separately)
 ]
 
 [project.scripts]

@@ -1,11 +1,8 @@
-"""mini-SWE-agent invocation wrapper."""
+"""Harbor invocation wrapper for SWE-bench evaluations."""
 from __future__ import annotations
 
-import os
-import re
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 
 from rich.console import Console
@@ -15,95 +12,108 @@ from .config import RunConfig
 
 console = Console()
 
-# Map HuggingFace dataset names to mini-swe-agent --subset shorthand
-_SUBSET_MAP: dict[str, str] = {
-    "SWE-bench/SWE-bench_Verified": "verified",
-    "SWE-bench/SWE-bench_Lite": "lite",
-    "SWE-bench/SWE-bench": "full",
-    "princeton-nlp/SWE-bench_Verified": "verified",
-    "princeton-nlp/SWE-bench_Lite": "lite",
-    "princeton-nlp/SWE-bench": "full",
+# Map HuggingFace dataset names to Harbor's expected format
+_HARBOR_DATASET_MAP: dict[str, str] = {
+    "SWE-bench/SWE-bench_Verified": "swe-bench/swe-bench-verified",
+    "SWE-bench/SWE-bench_Lite": "swe-bench/swe-bench-lite",
+    "SWE-bench/SWE-bench": "swe-bench/swe-bench",
+    "princeton-nlp/SWE-bench_Verified": "swe-bench/swe-bench-verified",
+    "princeton-nlp/SWE-bench_Lite": "swe-bench/swe-bench-lite",
+    "princeton-nlp/SWE-bench": "swe-bench/swe-bench",
 }
 
+# Default --ak kwargs injected for OpenHands (workaround for Harbor bug)
+_OPENHANDS_DEFAULT_KWARGS = [
+    'version="0.57.0"',
+    'python_version="3.12"',
+]
 
-def _dataset_to_subset(dataset: str) -> str:
-    return _SUBSET_MAP.get(dataset, dataset)
+
+def _normalize_dataset(dataset: str) -> str:
+    return _HARBOR_DATASET_MAP.get(dataset, dataset.lower())
+
+
+def _docker_base_url(base_url: str, gateway: str) -> str:
+    """Rewrite 127.0.0.1/localhost to the Docker gateway IP."""
+    return base_url.replace("127.0.0.1", gateway).replace("localhost", gateway)
+
+
+def _get_api_key(config: RunConfig) -> str:
+    key = None
+    if config.backend.type == "llamacpp":
+        key = config.backend.llamacpp.api_key
+    elif config.backend.type == "vllm":
+        key = config.backend.vllm.api_key
+    elif config.backend.type == "openai":
+        key = config.backend.openai.api_key
+    return key or "EMPTY"
 
 
 def run_agent(config: RunConfig, backend: Backend, output_dir: Path) -> Path:
     """
-    Run mini-SWE-agent in SWE-bench batch mode against the dataset.
-    Returns the path to the predictions file (preds.json).
+    Run Harbor against the dataset.
+    Returns the path to the Harbor jobs/ directory under output_dir.
     """
-    predictions_path = output_dir / "preds.json"
-
-    mini_extra = shutil.which("mini-extra")
-    if mini_extra is None:
+    uvx = shutil.which("uvx")
+    if uvx is None:
         raise FileNotFoundError(
-            "mini-extra not found in PATH. Install with: pip install mini-swe-agent"
+            "uvx not found in PATH. Install uv: https://docs.astral.sh/uv/"
         )
 
-    # litellm model string for a local OpenAI-compatible server
-    litellm_model = f"openai/{backend.model_name}"
-
-    subset = _dataset_to_subset(config.dataset)
+    docker_url = _docker_base_url(backend.base_url, config.backend.docker_gateway)
+    model_string = f"openai/{backend.model_name}"
+    dataset = _normalize_dataset(config.dataset)
+    agent_cfg = config.agent
 
     cmd: list[str] = [
-        mini_extra, "swebench",
-        "--model", litellm_model,
-        "--subset", subset,
-        "--split", config.split,
-        "--output", str(output_dir),
-        "--workers", str(config.agent.workers),
+        uvx, "harbor", "run",
+        "--dataset", dataset,
+        "--agent", agent_cfg.agent,
+        "--model", model_string,
+        "--env", agent_cfg.env,
+        "-k", str(agent_cfg.attempts),
+        "-n", str(agent_cfg.trials),
+        "--agent-setup-multiplier", str(agent_cfg.setup_multiplier),
     ]
 
-    # API key (litellm requires something even for local servers)
-    api_key = (
-        config.backend.llamacpp.api_key
-        if config.backend.type == "llamacpp"
-        else config.backend.vllm.api_key
-    ) or "EMPTY"
+    if agent_cfg.limit is not None:
+        cmd += ["-l", str(agent_cfg.limit)]
 
-    # Model and agent config via --config key-value pairs.
-    # Explicitly include the default config since -c disables it.
+    for instance_id in config.instance_ids:
+        cmd += ["-i", instance_id]
+
     cmd += [
-        "-c", "swebench.yaml",
-        "-c", f"model.model_kwargs.api_base={backend.base_url}",
-        "-c", f"model.model_kwargs.api_key={api_key}",
-        "-c", f"model.model_kwargs.temperature={config.sampling.temperature}",
-        "-c", f"model.model_kwargs.top_p={config.sampling.top_p}",
-        "-c", f"model.model_kwargs.max_tokens={config.sampling.max_tokens}",
-        "-c", f"agent.max_iterations={config.agent.max_steps}",
-        "-c", "model.cost_tracking=ignore_errors",
-        "-c", "environment.pull_timeout=600",
+        "--ae", f"OPENAI_BASE_URL={docker_url}",
+        "--ae", f"OPENAI_API_KEY={_get_api_key(config)}",
     ]
 
-    # Instance filter: convert list of IDs to regex
-    if config.instance_ids:
-        pattern = "^(" + "|".join(re.escape(i) for i in config.instance_ids) + ")$"
-        cmd += ["--filter", pattern]
+    # Auto-inject OpenHands --ak defaults (workaround for Harbor bug)
+    agent_kwargs = list(agent_cfg.agent_kwargs)
+    if agent_cfg.agent == "openhands":
+        existing_keys = {kv.split("=")[0] for kv in agent_kwargs}
+        for default_kv in _OPENHANDS_DEFAULT_KWARGS:
+            key = default_kv.split("=")[0]
+            if key not in existing_keys:
+                agent_kwargs.insert(0, default_kv)
 
-    cmd.extend(config.agent.extra_args)
+    for kv in agent_kwargs:
+        cmd += ["--ak", kv]
 
-    console.print(f"[cyan]Running mini-SWE-agent:[/cyan] predictions → {predictions_path}")
-    console.print(f"[dim]{' '.join(cmd)}[/dim]")
+    for kv in agent_cfg.agent_env:
+        cmd += ["--ae", kv]
 
-    env = os.environ.copy()
-    env.setdefault("MSWEA_MODEL_RETRY_STOP_AFTER_ATTEMPT", "5")
-    result = subprocess.run(cmd, check=False, env=env)
+    cmd.extend(agent_cfg.extra_args)
+
+    console.print(f"[cyan]Running Harbor:[/cyan] {' '.join(cmd)}")
+    result = subprocess.run(cmd, check=False, cwd=str(output_dir))
     if result.returncode != 0:
-        console.print(f"[red]mini-swe-agent exited with code {result.returncode}[/red]")
+        console.print(f"[red]Harbor exited with code {result.returncode}[/red]")
 
-    if not predictions_path.exists():
-        # Search for preds.json in subdirs (mini-extra may create timestamped dirs)
-        candidates = list(output_dir.rglob("preds.json"))
-        if candidates:
-            predictions_path = candidates[-1]
-            console.print(f"[dim]Found predictions at {predictions_path}[/dim]")
-        else:
-            raise FileNotFoundError(
-                f"No preds.json found under {output_dir}. "
-                "mini-swe-agent may have failed — check output above."
-            )
+    jobs_dir = output_dir / "jobs"
+    if not jobs_dir.exists():
+        raise FileNotFoundError(
+            f"Harbor did not produce a jobs/ directory under {output_dir}. "
+            "Harbor may have failed — check output above."
+        )
 
-    return predictions_path
+    return jobs_dir

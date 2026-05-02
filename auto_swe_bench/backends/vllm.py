@@ -4,6 +4,7 @@ from __future__ import annotations
 import shutil
 import signal
 import subprocess
+from pathlib import Path
 
 from rich.console import Console
 
@@ -18,6 +19,7 @@ class VllmBackend(OpenAIBackend):
     def __init__(self, model: ModelConfig, backend: BackendConfig, sampling: SamplingConfig) -> None:
         super().__init__(model, backend, sampling)
         self._process: subprocess.Popen | None = None
+        self._log_path: Path | None = None
 
     # ------------------------------------------------------------------
     def download(self) -> str:
@@ -39,7 +41,7 @@ class VllmBackend(OpenAIBackend):
         )
 
     # ------------------------------------------------------------------
-    def start(self, model_path: str) -> None:
+    def start(self, model_path: str, output_dir: Path | None = None) -> None:
         vllm_bin = shutil.which("vllm")
         if vllm_bin is None:
             raise FileNotFoundError(
@@ -77,9 +79,15 @@ class VllmBackend(OpenAIBackend):
         cmd.extend(cfg.extra_args)
 
         console.print(f"[cyan]Starting vLLM:[/cyan] {' '.join(cmd)}")
+        if output_dir is not None:
+            self._log_path = Path(output_dir) / "vllm.log"
+            log_file = open(self._log_path, "wb")
+            console.print(f"[dim]vLLM log → {self._log_path}[/dim]")
+        else:
+            log_file = subprocess.PIPE  # type: ignore[assignment]
         self._process = subprocess.Popen(
             cmd,
-            stdout=subprocess.PIPE,
+            stdout=log_file,
             stderr=subprocess.STDOUT,
         )
 
@@ -97,10 +105,13 @@ class VllmBackend(OpenAIBackend):
     # ------------------------------------------------------------------
     def check_alive(self) -> None:
         if self._process is not None and self._process.poll() is not None:
-            stdout, _ = self._process.communicate()
+            if self._log_path and self._log_path.exists():
+                tail = self._log_path.read_bytes()[-3000:].decode(errors="replace")
+            else:
+                stdout, _ = self._process.communicate()
+                tail = stdout.decode(errors="replace")[-3000:]
             raise RuntimeError(
-                f"vllm exited with code {self._process.returncode}:\n"
-                f"{stdout.decode()[-3000:]}"
+                f"vllm exited with code {self._process.returncode}:\n{tail}"
             )
 
     # ------------------------------------------------------------------

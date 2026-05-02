@@ -14,7 +14,7 @@ from .backends.llamacpp import LlamaCppBackend
 from .backends.openai_backend import OpenAIBackend
 from .backends.vllm import VllmBackend
 from .config import RunConfig, expand_sweep
-from .evaluator import parse_results, run_evaluation
+from .evaluator import collect_harbor_results, parse_results, run_evaluation
 
 console = Console()
 
@@ -53,18 +53,18 @@ def run_single(config: RunConfig) -> dict:
     # 2. Start backend server
     console.print("\n[bold]Step 2/4:[/bold] Starting backend server...")
     t0 = time.monotonic()
-    backend.start(model_path)
+    backend.start(model_path, output_dir=output_dir)
     backend.wait_ready()
     console.print(f"[green]Backend ready[/green] in {time.monotonic()-t0:.1f}s — {backend.base_url}")
 
-    predictions_path: Path | None = None
+    agent_output: Path | None = None
     results: dict = {}
 
     try:
-        # 3. Run SWE-agent
-        console.print("\n[bold]Step 3/4:[/bold] Running SWE-agent...")
+        # 3. Run Harbor
+        console.print("\n[bold]Step 3/4:[/bold] Running Harbor agent...")
         t0 = time.monotonic()
-        predictions_path = run_agent(config, backend, output_dir)
+        agent_output = run_agent(config, backend, output_dir)
         console.print(f"[dim]Agent done in {time.monotonic()-t0:.1f}s[/dim]")
 
     finally:
@@ -73,26 +73,20 @@ def run_single(config: RunConfig) -> dict:
         backend.stop()
 
     # 5. Evaluate
-    if config.evaluation.run_evaluation and predictions_path:
-        console.print("\n[bold]Evaluating predictions...[/bold]")
-        results = run_evaluation(
-            predictions_path=predictions_path,
-            run_id=run_id,
-            config=config.evaluation,
-            dataset=config.dataset,
-            output_dir=output_dir,
-        )
+    if config.evaluation.run_evaluation and agent_output:
+        console.print("\n[bold]Collecting Harbor results...[/bold]")
+        results = collect_harbor_results(agent_output)
         resolved, total, pct = parse_results(results)
         console.print(
             f"\n[bold green]Result:[/bold green] {resolved}/{total} resolved ({pct:.1f}%)"
         )
     elif not config.evaluation.run_evaluation:
-        console.print(f"\n[yellow]Evaluation skipped.[/yellow] Predictions: {predictions_path}")
+        console.print(f"\n[yellow]Evaluation skipped.[/yellow] Jobs: {agent_output}")
 
     return {
         "run_id": run_id,
         "name": config.name,
-        "predictions": str(predictions_path) if predictions_path else None,
+        "agent_output": str(agent_output) if agent_output else None,
         "results": results,
         "output_dir": str(output_dir),
     }

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import time
 from abc import ABC, abstractmethod
+from pathlib import Path
 
 import httpx
 
@@ -25,8 +26,8 @@ class Backend(ABC):
         """
 
     @abstractmethod
-    def start(self, model_path: str) -> None:
-        """Launch the server process."""
+    def start(self, model_path: str, output_dir: Path | None = None) -> None:
+        """Launch the server process. If output_dir is given, write server log there."""
 
     @abstractmethod
     def stop(self) -> None:

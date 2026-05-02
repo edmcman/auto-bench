@@ -101,6 +101,9 @@ class BackendConfig(BaseModel):
     host: str = "127.0.0.1"
     port: int | None = None  # defaults: llamacpp=8080, vllm=8000
     startup_timeout: int = 300  # seconds to wait for /health
+    # IP that Docker containers use to reach the host (172.17.0.1 on Linux,
+    # host.docker.internal on macOS/Docker Desktop)
+    docker_gateway: str = "172.17.0.1"
 
     llamacpp: LlamaCppConfig = Field(default_factory=LlamaCppConfig)
     vllm: VllmConfig = Field(default_factory=VllmConfig)
@@ -136,10 +139,16 @@ class SamplingConfig(BaseModel):
 # ---------------------------------------------------------------------------
 
 class AgentConfig(BaseModel):
-    max_steps: int = 30
-    timeout: int = 300  # seconds per instance
-    workers: int = 1    # parallel workers (mini-swe-agent --workers)
-    # Additional mini-extra CLI args
+    agent: str = "openhands"          # --agent
+    env: str = "docker"               # --env (Harbor execution environment)
+    attempts: int = 1                 # -k (attempts per instance)
+    limit: int | None = None          # -l (max instances from dataset; None = all)
+    trials: int = 1                   # -n (concurrent trials)
+    setup_multiplier: float = 10.0    # --agent-setup-multiplier
+    # --ak key="value" entries (openhands version/python_version auto-injected)
+    agent_kwargs: list[str] = Field(default_factory=list)
+    # Additional --ae KEY=VALUE entries for the agent container
+    agent_env: list[str] = Field(default_factory=list)
     extra_args: list[str] = Field(default_factory=list)
 
 
