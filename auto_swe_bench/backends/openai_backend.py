@@ -16,6 +16,9 @@ class OpenAIBackend(Backend):
     def download(self) -> str:
         return ""
 
+    def build_start_command(self, model_path: str) -> list[str]:
+        return []
+
     def start(self, model_path: str, output_dir: Path | None = None) -> None:
         pass
 

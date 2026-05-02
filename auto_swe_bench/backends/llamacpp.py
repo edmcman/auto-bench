@@ -43,8 +43,7 @@ class LlamaCppBackend(OpenAIBackend):
         )
 
     # ------------------------------------------------------------------
-    def start(self, model_path: str, output_dir: Path | None = None) -> None:
-        self._model_path = model_path
+    def build_start_command(self, model_path: str) -> list[str]:
         cfg = self.backend.llamacpp
 
         binary_parts = shlex.split(cfg.binary)
@@ -75,6 +74,12 @@ class LlamaCppBackend(OpenAIBackend):
             cmd += ["--n-gpu-layers", str(ngl)]
 
         cmd.extend(cfg.extra_args)
+        return cmd
+
+    # ------------------------------------------------------------------
+    def start(self, model_path: str, output_dir: Path | None = None) -> None:
+        self._model_path = model_path
+        cmd = self.build_start_command(model_path)
 
         console.print(f"[cyan]Starting llama-server:[/cyan] {' '.join(cmd)}")
         if output_dir is not None:

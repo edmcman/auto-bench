@@ -41,7 +41,7 @@ class VllmBackend(OpenAIBackend):
         )
 
     # ------------------------------------------------------------------
-    def start(self, model_path: str, output_dir: Path | None = None) -> None:
+    def build_start_command(self, model_path: str) -> list[str]:
         vllm_bin = shutil.which("vllm")
         if vllm_bin is None:
             raise FileNotFoundError(
@@ -49,8 +49,6 @@ class VllmBackend(OpenAIBackend):
             )
 
         cfg = self.backend.vllm
-        # Use the repo_id (or local path) as the model argument — vLLM
-        # will use the pre-cached HF snapshot automatically.
         model_arg = self.model.repo_id if self.model.source == "huggingface" else model_path
 
         cmd: list[str] = [
@@ -77,6 +75,11 @@ class VllmBackend(OpenAIBackend):
             cmd += ["--chat-template", cfg.chat_template]
 
         cmd.extend(cfg.extra_args)
+        return cmd
+
+    # ------------------------------------------------------------------
+    def start(self, model_path: str, output_dir: Path | None = None) -> None:
+        cmd = self.build_start_command(model_path)
 
         console.print(f"[cyan]Starting vLLM:[/cyan] {' '.join(cmd)}")
         if output_dir is not None:

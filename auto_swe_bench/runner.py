@@ -30,8 +30,11 @@ def make_backend(config: RunConfig) -> Backend:
         raise ValueError(f"Unknown backend type: {config.backend.type}")
 
 
-def serve_model(config: RunConfig) -> None:
-    """Download model, start backend server, print URL, and block until Ctrl+C."""
+def serve_model(config: RunConfig, dry_run: bool = False) -> None:
+    """Download model, start backend server, print URL, and block until Ctrl+C.
+
+    If dry_run is True, print the backend command and exit without starting.
+    """
     if config.backend.type == "openai":
         console.print(
             "[yellow]Backend type is 'openai' -- this is an external server. "
@@ -42,7 +45,6 @@ def serve_model(config: RunConfig) -> None:
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     run_id = f"{config.name}_{timestamp}"
     output_dir = Path(config.output_dir) / run_id
-    output_dir.mkdir(parents=True, exist_ok=True)
 
     console.rule(f"[bold blue]Serve: {run_id}")
     backend = make_backend(config)
@@ -51,6 +53,13 @@ def serve_model(config: RunConfig) -> None:
     t0 = time.monotonic()
     model_path = backend.download()
     console.print(f"[dim]Download done in {time.monotonic() - t0:.1f}s[/dim]")
+
+    cmd = backend.build_start_command(model_path)
+    if dry_run:
+        console.print(f"\n[cyan]Would run:[/cyan] {' '.join(cmd)}")
+        return
+
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     console.print("\n[bold]Step 2/3:[/bold] Starting backend server...")
     t0 = time.monotonic()

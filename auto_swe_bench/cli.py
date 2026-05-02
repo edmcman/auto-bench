@@ -120,6 +120,7 @@ def serve(
         None, "--local", "-l",
         help="Path to local config (default: ~/.config/auto-swe-bench/local.yaml)",
     ),
+    dry_run: bool = typer.Option(False, "--dry-run", "-n", help="Print the backend command and exit without running it"),
 ):
     """Download model and start the backend server. Runs until Ctrl+C."""
     from .config import expand_sweep
@@ -134,7 +135,7 @@ def serve(
             f"Serving only the first: [bold]{runs[0].name}[/bold][/yellow]"
         )
 
-    serve_model(runs[0])
+    serve_model(runs[0], dry_run=dry_run)
 
 
 def main():

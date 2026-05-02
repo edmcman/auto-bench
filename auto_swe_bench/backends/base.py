@@ -30,6 +30,10 @@ class Backend(ABC):
         """Launch the server process. If output_dir is given, write server log there."""
 
     @abstractmethod
+    def build_start_command(self, model_path: str) -> list[str]:
+        """Return the command list that would be executed to start the server."""
+
+    @abstractmethod
     def stop(self) -> None:
         """Terminate the server process."""
 
