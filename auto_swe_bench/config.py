@@ -31,6 +31,8 @@ class ModelConfig(BaseModel):
     revision: str = "main"
     # For local source: path to model file or directory
     local_path: str | None = None
+    # Injected from local config; not written in experiment YAML
+    hf_token: str | None = None
     # vLLM: filter which files to download
     allow_patterns: list[str] | None = None
     ignore_patterns: list[str] | None = None
