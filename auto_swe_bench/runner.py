@@ -154,7 +154,7 @@ def run_pipeline(config: RunConfig) -> list[dict]:
 
     if len(runs) > 1:
         sweep_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        sweep_dir = Path(config.output_dir) / f"sweep_{sweep_timestamp}"
+        sweep_dir = Path(config.output_dir) / f"sweep_{config.name}_{sweep_timestamp}"
         sweep_dir.mkdir(parents=True, exist_ok=True)
         for run_config in runs:
             run_config.output_dir = str(sweep_dir)

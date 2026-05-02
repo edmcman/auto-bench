@@ -14,6 +14,22 @@ model:
   repo_id: unsloth/Qwen3.5-2B-GGUF
   filename: Qwen3.5-2B-UD-Q5_K_XL.gguf
   sweep:
+    - label: ctx-1k
+      overrides:
+        backend_options:
+          ctx_size: 1024
+    - label: ctx-4k
+      overrides:
+        backend_options:
+          ctx_size: 4096
+    - label: ctx-8k
+      overrides:
+        backend_options:
+          ctx_size: 8192
+    - label: ctx-16k
+      overrides:
+        backend_options:
+          ctx_size: 16384
     - label: ctx-32k
       overrides:
         backend_options:
