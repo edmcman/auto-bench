@@ -89,7 +89,7 @@ class OpenAIConfig(BaseModel):
 
 class BackendConfig(BaseModel):
     type: Literal["llamacpp", "vllm", "openai"]
-    host: str = "127.0.0.1"
+    host: str = "172.17.0.1"
     port: int | None = None  # defaults: llamacpp=8080, vllm=8000
     startup_timeout: int = 300  # seconds to wait for /health
     # IP that Docker containers use to reach the host (172.17.0.1 on Linux,
@@ -189,7 +189,7 @@ class ExperimentConfig(BaseModel):
 
 class LocalConfig(BaseModel):
     """Machine-specific settings: how to run each backend."""
-    host: str = "127.0.0.1"
+    host: str = "172.17.0.1"
     port: int | None = None
     startup_timeout: int = 300
     docker_gateway: str = "172.17.0.1"
