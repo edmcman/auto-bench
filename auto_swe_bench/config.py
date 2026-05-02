@@ -173,6 +173,7 @@ class RunConfig(BaseModel):
     sampling: SamplingConfig = Field(default_factory=SamplingConfig)
     agent: AgentConfig = Field(default_factory=AgentConfig)
     evaluation: EvaluationConfig = Field(default_factory=EvaluationConfig)
+    remove_downloaded_models: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -192,6 +193,7 @@ class ExperimentConfig(BaseModel):
     sampling: SamplingConfig = Field(default_factory=SamplingConfig)
     agent: AgentConfig = Field(default_factory=AgentConfig)
     evaluation: EvaluationConfig = Field(default_factory=EvaluationConfig)
+    remove_downloaded_models: bool = False
 
 
 class LocalConfig(BaseModel):
