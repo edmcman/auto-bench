@@ -81,6 +81,12 @@ class VllmConfig(BaseModel):
     extra_args: list[str] = Field(default_factory=list)
 
 
+class BackendOptions(BaseModel):
+    """Experiment-level context-length settings."""
+    ctx_size: int | None = None      # llamacpp --ctx-size; None = defer to local/default
+    max_model_len: int | None = None # vllm --max-model-len; None = omit flag
+
+
 class OpenAIConfig(BaseModel):
     base_url: str = "https://api.openai.com/v1"
     api_key: str | None = None
@@ -181,6 +187,7 @@ class ExperimentConfig(BaseModel):
     instance_ids: list[str] = Field(default_factory=list)
     output_dir: str = "results"
     backend_type: Literal["llamacpp", "vllm", "openai"]
+    backend_options: BackendOptions = Field(default_factory=BackendOptions)
     model: ModelConfig
     sampling: SamplingConfig = Field(default_factory=SamplingConfig)
     agent: AgentConfig = Field(default_factory=AgentConfig)
@@ -202,14 +209,20 @@ class LocalConfig(BaseModel):
 def merge_configs(experiment: ExperimentConfig, local: LocalConfig) -> RunConfig:
     """Combine experiment and local config into a unified RunConfig."""
     data = experiment.model_dump()
+    llamacpp_data = local.llamacpp.model_dump() if local.llamacpp else {}
+    if experiment.backend_options.ctx_size is not None:
+        llamacpp_data["ctx_size"] = experiment.backend_options.ctx_size
+    vllm_data = local.vllm.model_dump() if local.vllm else {}
+    if experiment.backend_options.max_model_len is not None:
+        vllm_data["max_model_len"] = experiment.backend_options.max_model_len
     data["backend"] = {
         "type": experiment.backend_type,
         "host": local.host,
         "port": local.port,
         "startup_timeout": local.startup_timeout,
         "docker_gateway": local.docker_gateway,
-        "llamacpp": local.llamacpp.model_dump() if local.llamacpp else {},
-        "vllm": local.vllm.model_dump() if local.vllm else {},
+        "llamacpp": llamacpp_data,
+        "vllm": vllm_data,
         "openai": local.openai.model_dump() if local.openai else {},
     }
     if local.hf_token:
