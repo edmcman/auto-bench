@@ -192,6 +192,12 @@ def run_single(config: RunConfig) -> dict:
         console.print(
             f"\n[bold green]Result:[/bold green] {resolved}/{total} resolved ({pct:.1f}%)"
         )
+        if exc_stats := results.get("exception_stats"):
+            console.print("\n[bold]Exceptions:[/bold]")
+            for exc_type, ids in sorted(exc_stats.items()):
+                console.print(f"  [red]{exc_type}[/red]: {len(ids)} instance(s)")
+                for iid in ids:
+                    console.print(f"    [dim]- {iid}[/dim]")
     elif not config.evaluation.run_evaluation:
         console.print(f"\n[yellow]Evaluation skipped.[/yellow] Jobs: {agent_output}")
 
@@ -270,18 +276,28 @@ def _fmt_runtime(seconds: float | None) -> str:
     return f"{m}m {s}s" if m else f"{s}s"
 
 
+def _fmt_exceptions(results: dict) -> str:
+    exc_stats = results.get("exception_stats", {})
+    if not exc_stats:
+        return ""
+    return ", ".join(f"{t}({len(ids)})" for t, ids in sorted(exc_stats.items()))
+
+
 def _write_sweep_summary_md(results: list[dict], sweep_dir: Path) -> None:
     """Write summary.md to *sweep_dir* from the current results list."""
     lines = [
         "# Sweep Summary\n",
-        "| Run | Resolved | Total | % Resolved | Runtime | Error |",
-        "|-----|----------|-------|------------|---------|-------|",
+        "| Run | Resolved | Total | % Resolved | Runtime | Exceptions | Error |",
+        "|-----|----------|-------|------------|---------|------------|-------|",
     ]
     for r in results:
         resolved, total, pct = parse_results(r.get("results", {}))
         runtime = _fmt_runtime(r.get("total_runtime"))
+        exceptions = _fmt_exceptions(r.get("results", {}))
         error = r.get("error", "")
-        lines.append(f"| {r['name']} | {resolved} | {total} | {pct:.1f}% | {runtime} | {error} |")
+        lines.append(
+            f"| {r['name']} | {resolved} | {total} | {pct:.1f}% | {runtime} | {exceptions} | {error} |"
+        )
     (sweep_dir / "summary.md").write_text("\n".join(lines) + "\n")
 
 
@@ -292,6 +308,7 @@ def _print_sweep_summary(results: list[dict]) -> None:
     table.add_column("Resolved", justify="right")
     table.add_column("Total", justify="right")
     table.add_column("% Resolved", justify="right")
+    table.add_column("Exceptions", style="red")
     table.add_column("Runtime", justify="right")
     table.add_column("Error", style="red")
 
@@ -303,6 +320,7 @@ def _print_sweep_summary(results: list[dict]) -> None:
             name += " [red](failed)[/red]"
         table.add_row(
             name, str(resolved), str(total), f"{pct:.1f}%",
+            _fmt_exceptions(r.get("results", {})),
             _fmt_runtime(r.get("total_runtime")), error,
         )
 
