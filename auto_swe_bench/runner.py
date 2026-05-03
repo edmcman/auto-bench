@@ -142,6 +142,7 @@ def run_single(config: RunConfig) -> dict:
     Run a single (non-sweep) pipeline: download → start → agent → stop → evaluate.
     Returns result summary dict.
     """
+    t_start = time.monotonic()
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     run_id = f"{config.name}_{timestamp}"
     output_dir = Path(config.output_dir) / run_id
@@ -200,6 +201,7 @@ def run_single(config: RunConfig) -> dict:
         "agent_output": str(agent_output) if agent_output else None,
         "results": results,
         "output_dir": str(output_dir),
+        "total_runtime": time.monotonic() - t_start,
     }
 
 
@@ -249,6 +251,7 @@ def run_pipeline(config: RunConfig, *, resume_from: Path | None = None) -> list[
                 "results": {},
                 "output_dir": str(sweep_dir),
                 "error": str(exc),
+                "total_runtime": None,
             })
 
         if is_sweep:
@@ -260,19 +263,25 @@ def run_pipeline(config: RunConfig, *, resume_from: Path | None = None) -> list[
     return all_results
 
 
+def _fmt_runtime(seconds: float | None) -> str:
+    if seconds is None:
+        return "—"
+    m, s = divmod(int(seconds), 60)
+    return f"{m}m {s}s" if m else f"{s}s"
+
+
 def _write_sweep_summary_md(results: list[dict], sweep_dir: Path) -> None:
     """Write summary.md to *sweep_dir* from the current results list."""
     lines = [
         "# Sweep Summary\n",
-        "| Run | Resolved | Total | % Resolved |",
-        "|-----|----------|-------|------------|",
+        "| Run | Resolved | Total | % Resolved | Runtime | Error |",
+        "|-----|----------|-------|------------|---------|-------|",
     ]
     for r in results:
         resolved, total, pct = parse_results(r.get("results", {}))
-        line = f"| {r['name']} | {resolved} | {total} | {pct:.1f}% |"
-        if r.get("error"):
-            line = line.rstrip(" |") + f" (error: {r['error']}) |"
-        lines.append(line)
+        runtime = _fmt_runtime(r.get("total_runtime"))
+        error = r.get("error", "")
+        lines.append(f"| {r['name']} | {resolved} | {total} | {pct:.1f}% | {runtime} | {error} |")
     (sweep_dir / "summary.md").write_text("\n".join(lines) + "\n")
 
 
@@ -283,13 +292,19 @@ def _print_sweep_summary(results: list[dict]) -> None:
     table.add_column("Resolved", justify="right")
     table.add_column("Total", justify="right")
     table.add_column("% Resolved", justify="right")
+    table.add_column("Runtime", justify="right")
+    table.add_column("Error", style="red")
 
     for r in results:
         resolved, total, pct = parse_results(r.get("results", {}))
         name = r["name"]
-        if r.get("error"):
+        error = r.get("error", "")
+        if error:
             name += " [red](failed)[/red]"
-        table.add_row(name, str(resolved), str(total), f"{pct:.1f}%")
+        table.add_row(
+            name, str(resolved), str(total), f"{pct:.1f}%",
+            _fmt_runtime(r.get("total_runtime")), error,
+        )
 
     console.print(table)
 
