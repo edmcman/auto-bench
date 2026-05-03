@@ -68,11 +68,11 @@ sampling:
 agent:
   agent: openhands
   env: docker
-  attempts: 1
+  attempts: 4
   limit: 1
   setup_multiplier: 10.0
 
-remove_downloaded_models: true
+remove_downloaded_models: false
 
 evaluation:
   run_evaluation: true
