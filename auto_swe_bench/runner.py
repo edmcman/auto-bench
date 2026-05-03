@@ -43,6 +43,43 @@ def _is_model_cached(config: RunConfig) -> bool:
     return True  # openai: no local model
 
 
+def _is_entry_complete(entry_dir: Path) -> bool:
+    """Return True if *entry_dir* has Harbor evaluation results."""
+    jobs_dir = entry_dir / "jobs"
+    return jobs_dir.is_dir() and bool(list(jobs_dir.rglob("verifier/reward.txt")))
+
+
+def _find_completed_entries(sweep_dir: Path) -> set[str]:
+    """Scan *sweep_dir* for completed entry directories and return their names."""
+    completed: set[str] = set()
+    if not sweep_dir.is_dir():
+        return completed
+    for child in sweep_dir.iterdir():
+        if not child.is_dir():
+            continue
+        if _is_entry_complete(child):
+            # Directory names are {name}_{YYYYMMDD_HHMMSS} — strip trailing timestamp
+            name = "_".join(child.name.rsplit("_", 2)[:-2])
+            completed.add(name)
+    return completed
+
+
+def _collect_previous_results(sweep_dir: Path) -> list[dict]:
+    """Re-read evaluation results from already-completed entry directories."""
+    results: list[dict] = []
+    for child in sorted(sweep_dir.iterdir()):
+        if not child.is_dir():
+            continue
+        if _is_entry_complete(child):
+            name = "_".join(child.name.rsplit("_", 2)[:-2])
+            results.append({
+                "name": name,
+                "results": collect_harbor_results(child / "jobs"),
+                "output_dir": str(child),
+            })
+    return results
+
+
 def serve_model(config: RunConfig, dry_run: bool = False) -> None:
     """Download model, start backend server, print URL, and block until Ctrl+C.
 
@@ -166,31 +203,77 @@ def run_single(config: RunConfig) -> dict:
     }
 
 
-def run_pipeline(config: RunConfig) -> list[dict]:
-    """
-    Entry point for running a config (potentially a sweep).
-    Returns list of result dicts (one per sweep entry, or one for a plain run).
-    """
+def run_pipeline(config: RunConfig, *, resume_from: Path | None = None) -> list[dict]:
     runs = expand_sweep(config)
     all_results: list[dict] = []
+    is_sweep = len(runs) > 1
 
-    if len(runs) > 1:
-        sweep_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        sweep_dir = Path(config.output_dir) / f"sweep_{config.name}_{sweep_timestamp}"
+    if resume_from is not None:
+        if not is_sweep:
+            console.print("[yellow]--resume given but config is not a sweep; running as fresh.[/yellow]")
+            sweep_dir = Path(config.output_dir)
+        else:
+            sweep_dir = resume_from
+            completed = _find_completed_entries(sweep_dir)
+            if completed:
+                console.print(
+                    f"[dim]Found {len(completed)} already-completed entries; skipping them.[/dim]"
+                )
+            all_results = _collect_previous_results(sweep_dir)
+        runs_to_do = [r for r in runs if r.name not in {rr["name"] for rr in all_results}]
+    else:
+        if is_sweep:
+            sweep_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            sweep_dir = Path(config.output_dir) / f"sweep_{config.name}_{sweep_timestamp}"
+        else:
+            sweep_dir = Path(config.output_dir)
         sweep_dir.mkdir(parents=True, exist_ok=True)
-        for run_config in runs:
-            run_config.output_dir = str(sweep_dir)
+        runs_to_do = runs
 
-    for i, run_config in enumerate(runs):
-        if len(runs) > 1:
-            console.rule(f"[bold magenta]Sweep {i+1}/{len(runs)}: {run_config.name}")
-        result = run_single(run_config)
-        all_results.append(result)
+    for run_config in runs_to_do:
+        run_config.output_dir = str(sweep_dir)
 
-    if len(runs) > 1:
+    total = len(runs_to_do) + len(all_results)
+    for i, run_config in enumerate(runs_to_do):
+        if is_sweep:
+            done = len(all_results) + i
+            console.rule(f"[bold magenta]Sweep {done + 1}/{total}: {run_config.name}")
+
+        try:
+            result = run_single(run_config)
+            all_results.append(result)
+        except Exception as exc:
+            console.print(f"[red]Entry '{run_config.name}' failed: {exc}[/red]")
+            all_results.append({
+                "name": run_config.name,
+                "results": {},
+                "output_dir": str(sweep_dir),
+                "error": str(exc),
+            })
+
+        if is_sweep:
+            _write_sweep_summary_md(all_results, sweep_dir)
+
+    if is_sweep:
         _print_sweep_summary(all_results)
 
     return all_results
+
+
+def _write_sweep_summary_md(results: list[dict], sweep_dir: Path) -> None:
+    """Write summary.md to *sweep_dir* from the current results list."""
+    lines = [
+        "# Sweep Summary\n",
+        "| Run | Resolved | Total | % Resolved |",
+        "|-----|----------|-------|------------|",
+    ]
+    for r in results:
+        resolved, total, pct = parse_results(r.get("results", {}))
+        line = f"| {r['name']} | {resolved} | {total} | {pct:.1f}% |"
+        if r.get("error"):
+            line = line.rstrip(" |") + f" (error: {r['error']}) |"
+        lines.append(line)
+    (sweep_dir / "summary.md").write_text("\n".join(lines) + "\n")
 
 
 def _print_sweep_summary(results: list[dict]) -> None:
@@ -203,25 +286,14 @@ def _print_sweep_summary(results: list[dict]) -> None:
 
     for r in results:
         resolved, total, pct = parse_results(r.get("results", {}))
-        table.add_row(
-            r["name"],
-            str(resolved),
-            str(total),
-            f"{pct:.1f}%",
-        )
+        name = r["name"]
+        if r.get("error"):
+            name += " [red](failed)[/red]"
+        table.add_row(name, str(resolved), str(total), f"{pct:.1f}%")
 
     console.print(table)
 
-    # Save summary markdown
     if results:
-        summary_path = Path(results[0]["output_dir"]).parent / "summary.md"
-        lines = [
-            "# Sweep Summary\n",
-            "| Run | Resolved | Total | % Resolved |",
-            "|-----|----------|-------|------------|",
-        ]
-        for r in results:
-            resolved, total, pct = parse_results(r.get("results", {}))
-            lines.append(f"| {r['name']} | {resolved} | {total} | {pct:.1f}% |")
-        summary_path.write_text("\n".join(lines) + "\n")
-        console.print(f"[dim]Summary saved to {summary_path}[/dim]")
+        sweep_dir = Path(results[0]["output_dir"]).parent
+        _write_sweep_summary_md(results, sweep_dir)
+        console.print(f"[dim]Summary saved to {sweep_dir / 'summary.md'}[/dim]")

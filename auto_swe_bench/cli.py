@@ -62,6 +62,11 @@ def run(
     ),
     skip_download: bool = typer.Option(False, "--skip-download", help="Skip model download step"),
     skip_eval: bool = typer.Option(False, "--skip-eval", help="Skip evaluation harness after inference"),
+    resume: Path = typer.Option(
+        None, "--resume",
+        help="Resume a partially-completed sweep from this directory",
+        exists=True, file_okay=False, dir_okay=True,
+    ),
 ):
     """Run the full pipeline: download -> start server -> run agent -> evaluate."""
     from .runner import run_pipeline
@@ -70,7 +75,7 @@ def run(
     if skip_eval:
         cfg.evaluation.run_evaluation = False
 
-    run_pipeline(cfg)
+    run_pipeline(cfg, resume_from=resume)
 
 
 @app.command()
