@@ -104,7 +104,7 @@ def run_agent(config: RunConfig, backend: Backend, output_dir: Path) -> Path:
     console.print(f"[cyan]Running Harbor:[/cyan] {' '.join(cmd)}")
     result = subprocess.run(cmd, check=False, cwd=str(output_dir))
     if result.returncode != 0:
-        console.print(f"[red]Harbor exited with code {result.returncode}[/red]")
+        raise RuntimeError(f"Harbor exited with code {result.returncode}")
 
     jobs_dir = output_dir / "jobs"
     if not jobs_dir.exists():

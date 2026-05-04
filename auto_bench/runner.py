@@ -252,13 +252,7 @@ def run_pipeline(config: RunConfig, *, resume_from: Path | None = None) -> list[
             all_results.append(result)
         except Exception as exc:
             console.print(f"[red]Entry '{run_config.name}' failed: {exc}[/red]")
-            all_results.append({
-                "name": run_config.name,
-                "results": {},
-                "output_dir": str(sweep_dir),
-                "error": str(exc),
-                "total_runtime": None,
-            })
+            raise SystemExit(1)
 
         if is_sweep:
             _write_sweep_summary_md(all_results, sweep_dir)
