@@ -1,5 +1,5 @@
 # Smoke-test sweeping over various context sizes
-# Usage: auto-swe-bench run configs/ctx-size-sweep.yaml
+# Usage: auto-bench run configs/ctx-size-sweep.yaml
 
 name: ctx-size-sweep
 backend_type: llamacpp

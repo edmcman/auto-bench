@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**auto-swe-bench** orchestrates fully-automated SWE-bench runs against locally-hosted LLMs. The pipeline is:
+**auto-bench** orchestrates fully-automated SWE-bench runs against locally-hosted LLMs. The pipeline is:
 
 ```
 YAML config → download model → start backend server → run Harbor agent → collect results
@@ -16,15 +16,15 @@ It shells out to two external tools: `llama-server` or `vllm serve` (inference) 
 
 ```bash
 uv sync                                                # install dependencies
-uv run auto-swe-bench validate configs/smoke-test.yaml # validate config
-uv run auto-swe-bench download configs/smoke-test.yaml # download model only
-uv run auto-swe-bench run configs/smoke-test.yaml      # full pipeline
-uv run auto-swe-bench serve configs/smoke-test.yaml    # download + start server, block until Ctrl+C
+uv run auto-bench validate configs/smoke-test.yaml # validate config
+uv run auto-bench download configs/smoke-test.yaml # download model only
+uv run auto-bench run configs/smoke-test.yaml      # full pipeline
+uv run auto-bench serve configs/smoke-test.yaml    # download + start server, block until Ctrl+C
 ```
 
 There is no test suite. `configs/smoke-test.yaml` (1 instance) is the standard quick check.
 
-All commands accept `--local` / `-l` to specify a local config file (default: `~/.config/auto-swe-bench/local.yaml`). `run` also accepts `--skip-eval` and `--skip-download`. `serve` accepts `--dry-run` / `-n` to print the backend command without starting it.
+All commands accept `--local` / `-l` to specify a local config file (default: `~/.config/auto-bench/local.yaml`). `run` also accepts `--skip-eval` and `--skip-download`. `serve` accepts `--dry-run` / `-n` to print the backend command without starting it.
 
 ## Architecture
 
@@ -93,7 +93,7 @@ Evaluation happens inline during `run`, not as a separate CLI command. `collect_
 
 ## Key Design Points
 
-- **Two-tier config**: Experiment YAML describes what to run; `~/.config/auto-swe-bench/local.yaml` describes how to run it (host, ports, tokens). This keeps experiment configs portable.
+- **Two-tier config**: Experiment YAML describes what to run; `~/.config/auto-bench/local.yaml` describes how to run it (host, ports, tokens). This keeps experiment configs portable.
 - **Sweep mode**: A single YAML with `model.sweep` produces a comparison table and `summary.md`. Each sweep entry can set `filename`, `sampling`, and arbitrary `overrides` for deep-merging into the run config (e.g. `backend_options.ctx_size`).
 - **OpenAI backend as base class**: `type: openai` skips download/start/stop entirely and points at an already-running server. `LlamaCppBackend` and `VllmBackend` inherit from it for shared properties like `model_name` and `base_url`.
 - **Docker gateway**: Set `backend.docker_gateway` to the IP/hostname Docker containers use to reach the host. Default `172.17.0.1` works on Linux. On macOS with Docker Desktop use `host.docker.internal`.

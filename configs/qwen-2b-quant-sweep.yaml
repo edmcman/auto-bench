@@ -1,5 +1,5 @@
 # Benchmark all 22 quants of Qwen3.5-2B on a single SWE-bench instance
-# Usage: auto-swe-bench run configs/qwen-2b-quant-sweep.yaml
+# Usage: auto-bench run configs/qwen-2b-quant-sweep.yaml
 
 name: qwen-2b-quant-sweep
 backend_type: llamacpp

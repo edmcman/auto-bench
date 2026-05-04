@@ -1,4 +1,4 @@
-# auto-swe-bench
+# auto-bench
 
 Fully automated SWE-bench Verified runs against locally-hosted LLMs.
 
@@ -27,8 +27,8 @@ Sweep mode lets you test multiple quantizations (or other parameter variations) 
 ## Installation
 
 ```bash
-git clone https://github.com/yourname/auto-swe-bench
-cd auto-swe-bench
+git clone https://github.com/yourname/auto-bench
+cd auto-bench
 uv sync
 ```
 
@@ -38,19 +38,19 @@ uv sync
 
 ```bash
 # Validate a config
-uv run auto-swe-bench validate configs/smoke-test.yaml
+uv run auto-bench validate configs/smoke-test.yaml
 
 # Download model only (no inference)
-uv run auto-swe-bench download configs/smoke-test.yaml
+uv run auto-bench download configs/smoke-test.yaml
 
 # Run the full pipeline (download → server → agent → evaluate)
-uv run auto-swe-bench run configs/smoke-test.yaml
+uv run auto-bench run configs/smoke-test.yaml
 
 # Run inference only, skip evaluation
-uv run auto-swe-bench run configs/smoke-test.yaml --skip-eval
+uv run auto-bench run configs/smoke-test.yaml --skip-eval
 
 # Run a quantization sweep
-uv run auto-swe-bench run configs/llama3.1-8b-quant-sweep.yaml
+uv run auto-bench run configs/llama3.1-8b-quant-sweep.yaml
 ```
 
 ---
@@ -158,7 +158,7 @@ For sweep runs, a `results/summary.md` comparison table is also written.
 
 ## Adding a New Backend
 
-1. Create `auto_swe_bench/backends/mybackend.py` subclassing `Backend`
+1. Create `auto_bench/backends/mybackend.py` subclassing `Backend`
 2. Implement `download()`, `start()`, `stop()`, `model_name`
 3. Add the backend type to `BackendConfig.type` in `config.py`
 4. Register it in `runner.py:make_backend()`

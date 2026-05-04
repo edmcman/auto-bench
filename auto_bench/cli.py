@@ -1,4 +1,4 @@
-"""CLI entry point for auto-swe-bench."""
+"""CLI entry point for auto-bench."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -8,7 +8,7 @@ import yaml
 from rich.console import Console
 
 app = typer.Typer(
-    name="auto-swe-bench",
+    name="auto-bench",
     help="Automated SWE-bench Verified runs against locally-hosted LLMs.",
     add_completion=False,
 )
@@ -27,7 +27,7 @@ def _load_local(local_path: Path | None) -> LocalConfig:
             console.print(f"[red]Local config error in {local_path}:[/red] {exc}")
             raise typer.Exit(1)
 
-    default = Path.home() / ".config" / "auto-swe-bench" / "local.yaml"
+    default = Path.home() / ".config" / "auto-bench" / "local.yaml"
     if default.exists():
         try:
             data = yaml.safe_load(default.read_text())
@@ -58,7 +58,7 @@ def run(
     config: Path = typer.Argument(..., help="Path to experiment config YAML", exists=True),
     local: Path = typer.Option(
         None, "--local", "-l",
-        help="Path to local config (default: ~/.config/auto-swe-bench/local.yaml)",
+        help="Path to local config (default: ~/.config/auto-bench/local.yaml)",
     ),
     skip_download: bool = typer.Option(False, "--skip-download", help="Skip model download step"),
     skip_eval: bool = typer.Option(False, "--skip-eval", help="Skip evaluation harness after inference"),
@@ -83,7 +83,7 @@ def download(
     config: Path = typer.Argument(..., help="Path to experiment config YAML", exists=True),
     local: Path = typer.Option(
         None, "--local", "-l",
-        help="Path to local config (default: ~/.config/auto-swe-bench/local.yaml)",
+        help="Path to local config (default: ~/.config/auto-bench/local.yaml)",
     ),
 ):
     """Download model(s) defined in the config without running any inference."""
@@ -105,7 +105,7 @@ def validate(
     config: Path = typer.Argument(..., help="Path to experiment config YAML", exists=True),
     local: Path = typer.Option(
         None, "--local", "-l",
-        help="Path to local config (default: ~/.config/auto-swe-bench/local.yaml)",
+        help="Path to local config (default: ~/.config/auto-bench/local.yaml)",
     ),
 ):
     """Validate a YAML config file without running anything."""
@@ -123,7 +123,7 @@ def serve(
     config: Path = typer.Argument(..., help="Path to experiment config YAML", exists=True),
     local: Path = typer.Option(
         None, "--local", "-l",
-        help="Path to local config (default: ~/.config/auto-swe-bench/local.yaml)",
+        help="Path to local config (default: ~/.config/auto-bench/local.yaml)",
     ),
     dry_run: bool = typer.Option(False, "--dry-run", "-n", help="Print the backend command and exit without running it"),
 ):

@@ -1,5 +1,5 @@
 # Example: Quick smoke-test on 1 instance with a small local model
-# Usage: auto-swe-bench run configs/smoke-test.yaml
+# Usage: auto-bench run configs/smoke-test.yaml
 
 name: smoke-test
 backend_type: llamacpp

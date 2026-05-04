@@ -1,4 +1,4 @@
-"""Pydantic config schema for auto-swe-bench YAML configs."""
+"""Pydantic config schema for auto-bench YAML configs."""
 from __future__ import annotations
 
 from pathlib import Path
