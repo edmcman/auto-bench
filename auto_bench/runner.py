@@ -119,6 +119,8 @@ def serve_model(config: RunConfig, dry_run: bool = False) -> None:
 
     try:
         backend.wait_ready()
+        time.sleep(5)
+        backend.check_alive()
         console.print(
             f"[green]Backend ready[/green] in {time.monotonic() - t0:.1f}s — {backend.base_url}"
         )
@@ -165,6 +167,8 @@ def run_single(config: RunConfig) -> dict:
     t0 = time.monotonic()
     backend.start(model_path, output_dir=output_dir)
     backend.wait_ready()
+    time.sleep(5)
+    backend.check_alive()
     console.print(f"[green]Backend ready[/green] in {time.monotonic()-t0:.1f}s — {backend.base_url}")
 
     # 2.5 Perplexity (optional)
@@ -186,6 +190,7 @@ def run_single(config: RunConfig) -> dict:
         t0 = time.monotonic()
         agent_output = run_agent(config, backend, output_dir)
         console.print(f"[dim]Agent done in {time.monotonic()-t0:.1f}s[/dim]")
+        backend.check_alive()
 
     finally:
         # 4. Stop backend (always, even on failure)
