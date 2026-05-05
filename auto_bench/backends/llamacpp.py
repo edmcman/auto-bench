@@ -67,6 +67,18 @@ class LlamaCppBackend(OpenAIBackend):
 
         cmd += ["--ctx-size", str(self.backend_options.ctx_size or 0)]
 
+        if self.sampling.max_tokens > 0:
+            cmd += ["--predict", str(self.sampling.max_tokens)]
+
+        if self.sampling.temperature > 0.0:
+            cmd += ["--temp", str(self.sampling.temperature)]
+        if self.sampling.top_p < 1.0:
+            cmd += ["--top-p", str(self.sampling.top_p)]
+        if self.sampling.top_k is not None:
+            cmd += ["--top-k", str(self.sampling.top_k)]
+        if self.sampling.min_p is not None:
+            cmd += ["--min-p", str(self.sampling.min_p)]
+
         if cfg.auto_fit:
             cmd += ["--fit", "on"]
         else:

@@ -58,13 +58,17 @@ model:
       filename: Qwen3.5-2B-UD-Q6_K_XL.gguf
     - label: UD-Q8_K_XL
       filename: Qwen3.5-2B-UD-Q8_K_XL.gguf
+    #- label: vllm
+    #  overrides:
+    #    backend:
+    #      type: vllm
+    #    model:
+    #      repo_id: Qwen/Qwen3.5-2B
 
 sampling:
   temperature: 0.7
   top_p: 0.8
   top_k: 20
-  max_tokens: 32768
-
 agent:
   agent: openhands
   env: docker

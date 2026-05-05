@@ -1,6 +1,7 @@
 """vLLM backend."""
 from __future__ import annotations
 
+import json
 import shutil
 import signal
 import subprocess
@@ -61,8 +62,23 @@ class VllmBackend(OpenAIBackend):
             "--pipeline-parallel-size", str(cfg.pipeline_parallel_size),
         ]
 
-        if self.backend_options.max_model_len:
-            cmd += ["--max-model-len", str(self.backend_options.max_model_len)]
+        if self.backend_options.ctx_size:
+            cmd += ["--max-model-len", str(self.backend_options.ctx_size)]
+
+        gen_override: dict[str, float | int] = {}
+        if self.sampling.temperature > 0.0:
+            gen_override["temperature"] = self.sampling.temperature
+        if self.sampling.top_p < 1.0:
+            gen_override["top_p"] = self.sampling.top_p
+        if self.sampling.top_k is not None:
+            gen_override["top_k"] = self.sampling.top_k
+        if self.sampling.min_p is not None:
+            gen_override["min_p"] = self.sampling.min_p
+        if self.sampling.max_tokens > 0:
+            gen_override["max_new_tokens"] = self.sampling.max_tokens
+        if gen_override:
+            cmd += ["--override-generation-config", json.dumps(gen_override)]
+
         if cfg.quantization:
             cmd += ["--quantization", cfg.quantization]
         if cfg.enforce_eager:
