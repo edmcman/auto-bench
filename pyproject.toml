@@ -16,6 +16,7 @@ dependencies = [
     "huggingface-hub>=0.23",
     "rich>=13.0",
     "swebench>=3.0",
+    "datasets>=2.0",
     # Harbor is invoked via `uvx harbor run` (uv must be installed separately)
 ]
 

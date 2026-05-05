@@ -35,12 +35,26 @@ def collect_harbor_results(jobs_dir: Path) -> dict:
                 pass
 
     total = len(resolved_ids) + len(failed_ids)
+    n_incomplete = 0
+
+    for job_result in sorted(jobs_dir.glob("*/result.json")):
+        try:
+            data = json.loads(job_result.read_text())
+        except (json.JSONDecodeError, OSError):
+            continue
+        if data.get("finished_at") is None:
+            stats = data.get("stats", {})
+            n_total = data.get("n_total_trials", 0)
+            n_done = stats.get("n_completed_trials", 0)
+            n_incomplete += n_total - n_done
+
     return {
         "resolved": len(resolved_ids),
         "total": total,
         "resolved_ids": resolved_ids,
         "failed_ids": failed_ids,
         "exception_stats": exception_stats,
+        "n_incomplete": n_incomplete,
     }
 
 

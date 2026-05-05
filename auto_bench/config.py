@@ -153,8 +153,18 @@ class AgentConfig(BaseModel):
 # Evaluation config
 # ---------------------------------------------------------------------------
 
+class PerplexityConfig(BaseModel):
+    enabled: bool = False
+    dataset: str = "wikitext"
+    dataset_name: str = "wikitext-2-raw-v1"
+    split: str = "test"
+    max_tokens: int = 10_000
+    chunk_chars: int = 2000
+
+
 class EvaluationConfig(BaseModel):
     run_evaluation: bool = True
+    perplexity: PerplexityConfig = Field(default_factory=PerplexityConfig)
 
 
 # ---------------------------------------------------------------------------

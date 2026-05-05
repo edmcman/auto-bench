@@ -167,6 +167,16 @@ def run_single(config: RunConfig) -> dict:
     backend.wait_ready()
     console.print(f"[green]Backend ready[/green] in {time.monotonic()-t0:.1f}s — {backend.base_url}")
 
+    # 2.5 Perplexity (optional)
+    ppl: float | None = None
+    if config.evaluation.perplexity.enabled:
+        from .perplexity import compute_perplexity
+
+        console.print("\n[bold]Computing perplexity...[/bold]")
+        t0 = time.monotonic()
+        ppl = compute_perplexity(backend, config.evaluation.perplexity)
+        console.print(f"[green]Perplexity:[/green] {ppl:.2f} ({time.monotonic() - t0:.1f}s)")
+
     agent_output: Path | None = None
     results: dict = {}
 
@@ -192,6 +202,11 @@ def run_single(config: RunConfig) -> dict:
         console.print(
             f"\n[bold green]Result:[/bold green] {resolved}/{total} resolved ({pct:.1f}%)"
         )
+        if n_incomplete := results.get("n_incomplete", 0):
+            console.print(
+                f"\n[bold yellow]Warning:[/bold yellow] Harbor job is incomplete — "
+                f"{n_incomplete} trial(s) never ran (job may have crashed)."
+            )
         if exc_stats := results.get("exception_stats"):
             console.print("\n[bold]Exceptions:[/bold]")
             for exc_type, ids in sorted(exc_stats.items()):
@@ -208,6 +223,7 @@ def run_single(config: RunConfig) -> dict:
         "results": results,
         "output_dir": str(output_dir),
         "total_runtime": time.monotonic() - t_start,
+        "perplexity": ppl,
     }
 
 
@@ -272,25 +288,28 @@ def _fmt_runtime(seconds: float | None) -> str:
 
 def _fmt_exceptions(results: dict) -> str:
     exc_stats = results.get("exception_stats", {})
-    if not exc_stats:
-        return ""
-    return ", ".join(f"{t}({len(ids)})" for t, ids in sorted(exc_stats.items()))
+    n_incomplete = results.get("n_incomplete", 0)
+    parts = [f"{t}({len(ids)})" for t, ids in sorted(exc_stats.items())]
+    if n_incomplete:
+        parts.append(f"Incomplete({n_incomplete})")
+    return ", ".join(parts)
 
 
 def _write_sweep_summary_md(results: list[dict], sweep_dir: Path) -> None:
     """Write summary.md to *sweep_dir* from the current results list."""
     lines = [
         "# Sweep Summary\n",
-        "| Run | Resolved | Total | % Resolved | Runtime | Exceptions | Error |",
-        "|-----|----------|-------|------------|---------|------------|-------|",
+        "| Run | Resolved | Total | % Resolved | PPL | Runtime | Exceptions | Error |",
+        "|-----|----------|-------|------------|-----|---------|------------|-------|",
     ]
     for r in results:
         resolved, total, pct = parse_results(r.get("results", {}))
         runtime = _fmt_runtime(r.get("total_runtime"))
         exceptions = _fmt_exceptions(r.get("results", {}))
         error = r.get("error", "")
+        ppl = f"{r['perplexity']:.2f}" if r.get("perplexity") else "—"
         lines.append(
-            f"| {r['name']} | {resolved} | {total} | {pct:.1f}% | {runtime} | {exceptions} | {error} |"
+            f"| {r['name']} | {resolved} | {total} | {pct:.1f}% | {ppl} | {runtime} | {exceptions} | {error} |"
         )
     (sweep_dir / "summary.md").write_text("\n".join(lines) + "\n")
 
@@ -302,6 +321,7 @@ def _print_sweep_summary(results: list[dict]) -> None:
     table.add_column("Resolved", justify="right")
     table.add_column("Total", justify="right")
     table.add_column("% Resolved", justify="right")
+    table.add_column("PPL", justify="right")
     table.add_column("Exceptions", style="red")
     table.add_column("Runtime", justify="right")
     table.add_column("Error", style="red")
@@ -310,10 +330,11 @@ def _print_sweep_summary(results: list[dict]) -> None:
         resolved, total, pct = parse_results(r.get("results", {}))
         name = r["name"]
         error = r.get("error", "")
+        ppl = f"{r['perplexity']:.2f}" if r.get("perplexity") else "—"
         if error:
             name += " [red](failed)[/red]"
         table.add_row(
-            name, str(resolved), str(total), f"{pct:.1f}%",
+            name, str(resolved), str(total), f"{pct:.1f}%", ppl,
             _fmt_exceptions(r.get("results", {})),
             _fmt_runtime(r.get("total_runtime")), error,
         )
