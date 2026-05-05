@@ -120,6 +120,8 @@ class VllmBackend(OpenAIBackend):
             except subprocess.TimeoutExpired:
                 self._process.kill()
         self._process = None
+        if self._log_path and self._log_path.exists():
+            subprocess.run(["xz", str(self._log_path)], check=True)
 
     # ------------------------------------------------------------------
     def check_alive(self) -> None:
