@@ -6,7 +6,11 @@ import subprocess
 import threading
 from pathlib import Path
 
+from rich.console import Console
+
 from .openai_backend import OpenAIBackend
+
+console = Console()
 
 _TAIL = 3000
 
@@ -21,6 +25,14 @@ class SubprocessBackend(OpenAIBackend):
         self._log_path: Path | None = None
         self._stopping = False
         self._crash_error: str | None = None
+
+    def _resolve_local_model(self) -> str | None:
+        if self.model.source == "local":
+            path = self.model.local_path
+            assert path, "local_path must be set for source='local'"
+            console.print(f"[cyan]Using local model:[/cyan] {path}")
+            return path
+        return None
 
     def _launch(self, cmd: list[str], output_dir: Path | None) -> None:
         if output_dir is not None:

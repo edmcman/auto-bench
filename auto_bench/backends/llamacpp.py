@@ -23,16 +23,11 @@ class LlamaCppBackend(SubprocessBackend):
         self._model_path: str | None = None
 
     def download(self) -> str:
-        if self.model.source == "local":
-            path = self.model.local_path
-            assert path, "local_path must be set for source='local'"
-            console.print(f"[cyan]Using local model:[/cyan] {path}")
+        if (path := self._resolve_local_model()) is not None:
             return path
-
         assert self.model.repo_id, "model.repo_id is required for llamacpp backend"
         filename = self.model.filename
         assert filename, "model.filename (GGUF filename) is required for llamacpp backend"
-
         return download_gguf(
             repo_id=self.model.repo_id,
             filename=filename,
@@ -67,14 +62,9 @@ class LlamaCppBackend(SubprocessBackend):
         if self.sampling.max_tokens > 0:
             cmd += ["--predict", str(self.sampling.max_tokens)]
 
-        if self.sampling.temperature > 0.0:
-            cmd += ["--temp", str(self.sampling.temperature)]
-        if self.sampling.top_p < 1.0:
-            cmd += ["--top-p", str(self.sampling.top_p)]
-        if self.sampling.top_k is not None:
-            cmd += ["--top-k", str(self.sampling.top_k)]
-        if self.sampling.min_p is not None:
-            cmd += ["--min-p", str(self.sampling.min_p)]
+        _flags = {"temperature": "--temp", "top_p": "--top-p", "top_k": "--top-k", "min_p": "--min-p"}
+        for key, val in self.sampling.non_defaults().items():
+            cmd += [_flags[key], str(val)]
 
         if cfg.auto_fit:
             cmd += ["--fit", "on"]

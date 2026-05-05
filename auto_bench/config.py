@@ -129,6 +129,19 @@ class SamplingConfig(BaseModel):
     # Extra params forwarded verbatim to the OpenAI client extra_body
     extra: dict[str, Any] = Field(default_factory=dict)
 
+    def non_defaults(self) -> dict[str, float | int]:
+        """Return sampling params that differ from their defaults."""
+        result: dict[str, float | int] = {}
+        if self.temperature > 0.0:
+            result["temperature"] = self.temperature
+        if self.top_p < 1.0:
+            result["top_p"] = self.top_p
+        if self.top_k is not None:
+            result["top_k"] = self.top_k
+        if self.min_p is not None:
+            result["min_p"] = self.min_p
+        return result
+
 
 # ---------------------------------------------------------------------------
 # Agent config

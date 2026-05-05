@@ -19,14 +19,9 @@ class VllmBackend(SubprocessBackend):
     log_filename = "vllm.log"
 
     def download(self) -> str:
-        if self.model.source == "local":
-            path = self.model.local_path
-            assert path, "local_path must be set for source='local'"
-            console.print(f"[cyan]Using local model directory:[/cyan] {path}")
+        if (path := self._resolve_local_model()) is not None:
             return path
-
         assert self.model.repo_id, "model.repo_id is required for vllm backend"
-
         return download_hf_snapshot(
             repo_id=self.model.repo_id,
             revision=self.model.revision,
@@ -58,15 +53,7 @@ class VllmBackend(SubprocessBackend):
         if self.backend_options.ctx_size:
             cmd += ["--max-model-len", str(self.backend_options.ctx_size)]
 
-        gen_override: dict[str, float | int] = {}
-        if self.sampling.temperature > 0.0:
-            gen_override["temperature"] = self.sampling.temperature
-        if self.sampling.top_p < 1.0:
-            gen_override["top_p"] = self.sampling.top_p
-        if self.sampling.top_k is not None:
-            gen_override["top_k"] = self.sampling.top_k
-        if self.sampling.min_p is not None:
-            gen_override["min_p"] = self.sampling.min_p
+        gen_override: dict[str, float | int] = dict(self.sampling.non_defaults())
         if self.sampling.max_tokens > 0:
             gen_override["max_new_tokens"] = self.sampling.max_tokens
         if gen_override:

@@ -15,41 +15,31 @@ app = typer.Typer(
 console = Console()
 
 
+def _load_yaml(path: Path, config_class, label: str):
+    try:
+        return config_class.model_validate(yaml.safe_load(path.read_text()))
+    except Exception as exc:
+        console.print(f"[red]{label}:[/red] {exc}")
+        raise typer.Exit(1)
+
+
 def _load_local(local_path: Path | None) -> LocalConfig:
-    """Load local config: explicit --local, default file, or built-in defaults."""
     from .config import LocalConfig
 
     if local_path is not None:
-        try:
-            data = yaml.safe_load(local_path.read_text())
-            return LocalConfig.model_validate(data)
-        except Exception as exc:
-            console.print(f"[red]Local config error in {local_path}:[/red] {exc}")
-            raise typer.Exit(1)
+        return _load_yaml(local_path, LocalConfig, f"Local config error in {local_path}")
 
     default = Path.home() / ".config" / "auto-bench" / "local.yaml"
     if default.exists():
-        try:
-            data = yaml.safe_load(default.read_text())
-            return LocalConfig.model_validate(data)
-        except Exception as exc:
-            console.print(f"[red]Local config error in {default}:[/red] {exc}")
-            raise typer.Exit(1)
+        return _load_yaml(default, LocalConfig, f"Local config error in {default}")
 
     return LocalConfig()
 
 
 def _load_configs(config_path: Path, local_path: Path | None = None):
-    """Load experiment + local configs and merge into a RunConfig."""
     from .config import ExperimentConfig, merge_configs
 
-    data = yaml.safe_load(config_path.read_text())
-    try:
-        experiment = ExperimentConfig.model_validate(data)
-    except Exception as exc:
-        console.print(f"[red]Experiment config error:[/red] {exc}")
-        raise typer.Exit(1)
-
+    experiment = _load_yaml(config_path, ExperimentConfig, "Experiment config error")
     return merge_configs(experiment, _load_local(local_path))
 
 
