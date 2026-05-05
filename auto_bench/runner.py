@@ -20,6 +20,22 @@ from .evaluator import collect_harbor_results, parse_results
 console = Console()
 
 
+def _download(backend: Backend) -> str:
+    t0 = time.monotonic()
+    model_path = backend.download()
+    console.print(f"[dim]Download done in {time.monotonic() - t0:.1f}s[/dim]")
+    return model_path
+
+
+def _start_backend(backend: Backend, model_path: str, output_dir: Path) -> None:
+    t0 = time.monotonic()
+    backend.start(model_path, output_dir=output_dir)
+    backend.wait_ready()
+    time.sleep(5)
+    backend.check_alive()
+    console.print(f"[green]Backend ready[/green] in {time.monotonic() - t0:.1f}s — {backend.base_url}")
+
+
 def make_backend(config: RunConfig) -> Backend:
     if config.backend.type == "llamacpp":
         return LlamaCppBackend(config.model, config.backend, config.sampling, config.backend_options)
@@ -102,9 +118,7 @@ def serve_model(config: RunConfig, dry_run: bool = False) -> None:
     was_cached = _is_model_cached(config) if config.remove_downloaded_models else True
 
     console.print("\n[bold]Step 1/3:[/bold] Downloading model...")
-    t0 = time.monotonic()
-    model_path = backend.download()
-    console.print(f"[dim]Download done in {time.monotonic() - t0:.1f}s[/dim]")
+    model_path = _download(backend)
 
     cmd = backend.build_start_command(model_path)
     if dry_run:
@@ -114,16 +128,8 @@ def serve_model(config: RunConfig, dry_run: bool = False) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     console.print("\n[bold]Step 2/3:[/bold] Starting backend server...")
-    t0 = time.monotonic()
-    backend.start(model_path, output_dir=output_dir)
-
     try:
-        backend.wait_ready()
-        time.sleep(5)
-        backend.check_alive()
-        console.print(
-            f"[green]Backend ready[/green] in {time.monotonic() - t0:.1f}s — {backend.base_url}"
-        )
+        _start_backend(backend, model_path, output_dir)
         console.print(
             f"\n[bold green]Server is running.[/bold green] Press Ctrl+C to stop.\n"
         )
@@ -158,18 +164,11 @@ def run_single(config: RunConfig) -> dict:
 
     # 1. Download model
     console.print("\n[bold]Step 1/4:[/bold] Downloading model...")
-    t0 = time.monotonic()
-    model_path = backend.download()
-    console.print(f"[dim]Download done in {time.monotonic()-t0:.1f}s[/dim]")
+    model_path = _download(backend)
 
     # 2. Start backend server
     console.print("\n[bold]Step 2/4:[/bold] Starting backend server...")
-    t0 = time.monotonic()
-    backend.start(model_path, output_dir=output_dir)
-    backend.wait_ready()
-    time.sleep(5)
-    backend.check_alive()
-    console.print(f"[green]Backend ready[/green] in {time.monotonic()-t0:.1f}s — {backend.base_url}")
+    _start_backend(backend, model_path, output_dir)
 
     # 2.5 Perplexity (optional)
     ppl: float | None = None
