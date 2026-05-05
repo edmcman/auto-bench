@@ -126,6 +126,7 @@ class SamplingConfig(BaseModel):
     top_k: int | None = None
     min_p: float | None = None
     presence_penalty: float | None = None
+    repetition_penalty: float | None = None
     max_tokens: int = -1
     # Extra params forwarded verbatim to the OpenAI client extra_body
     extra: dict[str, Any] = Field(default_factory=dict)
@@ -143,6 +144,8 @@ class SamplingConfig(BaseModel):
             result["min_p"] = self.min_p
         if self.presence_penalty is not None:
             result["presence_penalty"] = self.presence_penalty
+        if self.repetition_penalty is not None:
+            result["repetition_penalty"] = self.repetition_penalty
         return result
 
 

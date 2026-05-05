@@ -62,7 +62,7 @@ class LlamaCppBackend(SubprocessBackend):
         if self.sampling.max_tokens > 0:
             cmd += ["--predict", str(self.sampling.max_tokens)]
 
-        _flags = {"temperature": "--temp", "top_p": "--top-p", "top_k": "--top-k", "min_p": "--min-p", "presence_penalty": "--presence-penalty"}
+        _flags = {"temperature": "--temp", "top_p": "--top-p", "top_k": "--top-k", "min_p": "--min-p", "presence_penalty": "--presence-penalty", "repetition_penalty": "--repeat-penalty"}
         for key, val in self.sampling.non_defaults().items():
             cmd += [_flags[key], str(val)]
 
