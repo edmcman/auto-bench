@@ -38,7 +38,11 @@ def compute_perplexity(backend: Backend, cfg: PerplexityConfig) -> float:
                 },
             )
             resp.raise_for_status()
-            lps = resp.json()["choices"][0]["logprobs"]["token_logprobs"]
+            logprobs = resp.json()["choices"][0]["logprobs"]
+            if "token_logprobs" in logprobs:
+                lps = logprobs["token_logprobs"]  # OpenAI / vLLM format
+            else:
+                lps = [item["logprob"] for item in logprobs["content"]]  # llama.cpp format
             valid = [lp for lp in lps if lp is not None]
             total_nll += -sum(valid)
             total_tokens += len(valid)
