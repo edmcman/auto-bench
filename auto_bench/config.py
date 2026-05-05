@@ -83,8 +83,7 @@ class VllmConfig(BaseModel):
 
 class BackendOptions(BaseModel):
     """Experiment-level context-length settings."""
-    ctx_size: int | None = None      # llamacpp --ctx-size; None = defer to local/default
-    max_model_len: int | None = None # vllm --max-model-len; None = omit flag
+    ctx_size: int | None = None      # llamacpp --ctx-size / vllm --max-model-len; None = defer to default
 
 
 class OpenAIConfig(BaseModel):
@@ -126,7 +125,7 @@ class SamplingConfig(BaseModel):
     top_p: float = 1.0
     top_k: int | None = None
     min_p: float | None = None
-    max_tokens: int = 4096
+    max_tokens: int = -1
     # Extra params forwarded verbatim to the OpenAI client extra_body
     extra: dict[str, Any] = Field(default_factory=dict)
 
@@ -154,7 +153,7 @@ class AgentConfig(BaseModel):
 # ---------------------------------------------------------------------------
 
 class PerplexityConfig(BaseModel):
-    enabled: bool = False
+    enabled: bool = True
     dataset: str = "wikitext"
     dataset_name: str = "wikitext-2-raw-v1"
     split: str = "test"
