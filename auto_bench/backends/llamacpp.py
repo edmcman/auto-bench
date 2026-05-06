@@ -37,42 +37,42 @@ class LlamaCppBackend(SubprocessBackend):
 
     def build_start_command(self, model_path: str) -> list[str]:
         cfg = self.backend.llamacpp
+        model_file = Path(model_path)
+        port = self.backend.effective_port()
 
-        binary_parts = shlex.split(cfg.binary)
-        binary_name = binary_parts[0]
-        if not Path(binary_name).is_absolute():
-            resolved = shutil.which(binary_name)
-            if resolved is None:
-                raise FileNotFoundError(
-                    f"Command '{binary_name}' not found in PATH. "
-                    "Set backend.llamacpp.binary to a full path or compound command."
-                )
-            binary_parts[0] = resolved
-
-        cmd: list[str] = binary_parts + [
-            "--model", model_path,
-            "--host", self.backend.host,
-            "--port", str(self.backend.effective_port()),
+        inner_args: list[str] = [
             "--parallel", str(cfg.parallel),
             "--alias", self.model_name,
+            "--ctx-size", str(self.backend_options.ctx_size or 0),
         ]
-
-        cmd += ["--ctx-size", str(self.backend_options.ctx_size or 0)]
-
         if self.sampling.max_tokens > 0:
-            cmd += ["--predict", str(self.sampling.max_tokens)]
-
+            inner_args += ["--predict", str(self.sampling.max_tokens)]
         _flags = {"temperature": "--temp", "top_p": "--top-p", "top_k": "--top-k", "min_p": "--min-p", "presence_penalty": "--presence-penalty", "repetition_penalty": "--repeat-penalty"}
         for key, val in self.sampling.non_defaults().items():
-            cmd += [_flags[key], str(val)]
-
+            inner_args += [_flags[key], str(val)]
         if cfg.auto_fit:
-            cmd += ["--fit", "on"]
+            inner_args += ["--fit", "on"]
         else:
-            cmd += ["--n-gpu-layers", str(cfg.n_gpu_layers)]
+            inner_args += ["--n-gpu-layers", str(cfg.n_gpu_layers)]
+        inner_args.extend(cfg.extra_args)
 
-        cmd.extend(cfg.extra_args)
-        return cmd
+        parts = shlex.split(cfg.cmd_template.format(
+            model=model_path,
+            model_dir=str(model_file.parent),
+            model_name=model_file.name,
+            host=self.backend.host,
+            port=str(port),
+            args=shlex.join(inner_args),
+        ))
+        if not Path(parts[0]).is_absolute():
+            resolved = shutil.which(parts[0])
+            if resolved is None:
+                raise FileNotFoundError(
+                    f"Command '{parts[0]}' not found in PATH. "
+                    "Set backend.llamacpp.cmd_template to a full path or template."
+                )
+            parts[0] = resolved
+        return parts
 
     def start(self, model_path: str, output_dir: Path | None = None) -> None:
         self._model_path = model_path

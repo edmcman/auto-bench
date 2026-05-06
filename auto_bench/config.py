@@ -61,7 +61,7 @@ class ModelConfig(BaseModel):
 # ---------------------------------------------------------------------------
 
 class LlamaCppConfig(BaseModel):
-    binary: str = "llama-server"
+    cmd_template: str = "llama-server --model {model} --host {host} --port {port} {args}"
     n_gpu_layers: int | str = "auto"
     parallel: int = 1
     auto_fit: bool = True
@@ -69,6 +69,7 @@ class LlamaCppConfig(BaseModel):
 
 
 class VllmConfig(BaseModel):
+    cmd_template: str = "vllm serve {model} --host {host} --port {port} {args}"
     dtype: str = "auto"
     gpu_memory_utilization: float = 0.9
     tensor_parallel_size: int = 1
