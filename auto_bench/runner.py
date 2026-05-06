@@ -1,6 +1,7 @@
 """Top-level orchestration: download → start → agent → stop → evaluate."""
 from __future__ import annotations
 
+import json
 import time
 from datetime import datetime
 from pathlib import Path
@@ -84,15 +85,17 @@ def _collect_previous_results(sweep_dir: Path) -> list[dict]:
     """Re-read evaluation results from already-completed entry directories."""
     results: list[dict] = []
     for child in sorted(sweep_dir.iterdir()):
-        if not child.is_dir():
+        if not child.is_dir() or not _is_entry_complete(child):
             continue
-        if _is_entry_complete(child):
-            name = "_".join(child.name.rsplit("_", 2)[:-2])
-            results.append({
-                "name": name,
-                "results": collect_harbor_results(child / "jobs"),
-                "output_dir": str(child),
-            })
+        name = "_".join(child.name.rsplit("_", 2)[:-2])
+        meta_file = child / "run_meta.json"
+        meta = json.loads(meta_file.read_text()) if meta_file.exists() else {}
+        results.append({
+            "name": name,
+            "results": collect_harbor_results(child / "jobs"),
+            "output_dir": str(child),
+            **meta,
+        })
     return results
 
 
@@ -220,13 +223,17 @@ def run_single(config: RunConfig) -> dict:
     elif not config.evaluation.run_evaluation:
         console.print(f"\n[yellow]Evaluation skipped.[/yellow] Jobs: {agent_output}")
 
+    total_runtime = time.monotonic() - t_start
+    (output_dir / "run_meta.json").write_text(
+        json.dumps({"perplexity": ppl, "total_runtime": total_runtime})
+    )
     return {
         "run_id": run_id,
         "name": config.name,
         "agent_output": str(agent_output) if agent_output else None,
         "results": results,
         "output_dir": str(output_dir),
-        "total_runtime": time.monotonic() - t_start,
+        "total_runtime": total_runtime,
         "perplexity": ppl,
     }
 
