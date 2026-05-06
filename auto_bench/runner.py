@@ -251,7 +251,7 @@ def run_pipeline(config: RunConfig, *, resume_from: Path | None = None) -> list[
 
     if resume_from is not None:
         if not is_sweep:
-            console.print("[yellow]--resume given but config is not a sweep; running as fresh.[/yellow]")
+            console.print("[yellow]--resume-from given but config is not a sweep; running as fresh.[/yellow]")
             sweep_dir = Path(config.output_dir)
         else:
             sweep_dir = resume_from

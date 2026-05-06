@@ -52,32 +52,32 @@ def run(
     ),
     skip_download: bool = typer.Option(False, "--skip-download", help="Skip model download step"),
     skip_eval: bool = typer.Option(False, "--skip-eval", help="Skip evaluation harness after inference"),
-    resume: Path = typer.Option(
-        None, "--resume",
+    resume_from: Path = typer.Option(
+        None, "--resume-from",
         help="Resume a partially-completed sweep from this directory",
         exists=True, file_okay=False, dir_okay=True,
     ),
-    resume_last: bool = typer.Option(False, "--resume-last", help="Resume the most recent sweep in the output directory"),
+    resume: bool = typer.Option(False, "--resume", help="Resume the most recent sweep in the output directory"),
 ):
     """Run the full pipeline: download -> start server -> run agent -> evaluate."""
     from .runner import _find_latest_sweep_dir, run_pipeline
 
-    if resume and resume_last:
-        console.print("[red]--resume and --resume-last are mutually exclusive[/red]")
+    if resume_from and resume:
+        console.print("[red]--resume-from and --resume are mutually exclusive[/red]")
         raise typer.Exit(1)
 
     cfg = _load_configs(config, local)
     if skip_eval:
         cfg.evaluation.run_evaluation = False
 
-    if resume_last:
-        resume = _find_latest_sweep_dir(Path(cfg.output_dir))
-        if resume is None:
+    if resume:
+        resume_from = _find_latest_sweep_dir(Path(cfg.output_dir))
+        if resume_from is None:
             console.print(f"[red]No sweep directories found in {cfg.output_dir}[/red]")
             raise typer.Exit(1)
-        console.print(f"[dim]Resuming latest sweep: {resume}[/dim]")
+        console.print(f"[dim]Resuming latest sweep: {resume_from}[/dim]")
 
-    run_pipeline(cfg, resume_from=resume)
+    run_pipeline(cfg, resume_from=resume_from)
 
 
 @app.command()
