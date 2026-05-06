@@ -99,6 +99,12 @@ def _collect_previous_results(sweep_dir: Path) -> list[dict]:
     return results
 
 
+def _find_latest_sweep_dir(output_dir: Path) -> Path | None:
+    """Return the most recent sweep_* directory under output_dir, or None."""
+    dirs = [d for d in output_dir.iterdir() if d.is_dir() and d.name.startswith("sweep_")]
+    return max(dirs, key=lambda d: d.name) if dirs else None
+
+
 def serve_model(config: RunConfig, dry_run: bool = False) -> None:
     """Download model, start backend server, print URL, and block until Ctrl+C.
 
