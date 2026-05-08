@@ -1,6 +1,7 @@
 """Shared base for backends that manage a subprocess."""
 from __future__ import annotations
 
+import shutil
 import signal
 import subprocess
 import threading
@@ -82,3 +83,26 @@ class SubprocessBackend(OpenAIBackend):
             raise RuntimeError(
                 f"{self.server_name} exited with code {self._process.returncode}:\n{tail}"
             )
+
+    def get_version(self) -> str | None:
+        """Return the version string of the backend binary, or None."""
+        bt = self.backend.type
+        if bt == "llamacpp":
+            tmpl = self.backend.llamacpp.cmd_template
+        elif bt == "vllm":
+            tmpl = self.backend.vllm.cmd_template
+        else:
+            return None
+
+        binary = tmpl.split()[0]
+        resolved = shutil.which(binary)
+        if not resolved:
+            return None
+
+        try:
+            result = subprocess.run(
+                [resolved, "--version"], capture_output=True, text=True, timeout=10
+            )
+            return result.stdout.strip() if result.returncode == 0 else None
+        except Exception:
+            return None

@@ -180,8 +180,9 @@ evaluation:
     dataset: wikitext
     dataset_name: wikitext-2-raw-v1
     split: test
-    max_tokens: 10000                    # characters of text to evaluate
-    chunk_chars: 2000                    # per-request chunk size
+    max_chars: 40000                      # max characters of text to evaluate
+    chunk_chars: 4096                     # per-request chunk size (chars)
+    stride_chars: 2048                    # stride between chunks (50% overlap)
 ```
 
 ---

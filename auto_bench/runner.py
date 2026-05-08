@@ -230,8 +230,9 @@ def run_single(config: RunConfig) -> dict:
         console.print(f"\n[yellow]Evaluation skipped.[/yellow] Jobs: {agent_output}")
 
     total_runtime = time.monotonic() - t_start
+    version = backend.get_version()
     (output_dir / "run_meta.json").write_text(
-        json.dumps({"perplexity": ppl, "total_runtime": total_runtime})
+        json.dumps({"perplexity": ppl, "total_runtime": total_runtime, "version": version})
     )
     return {
         "run_id": run_id,
@@ -241,6 +242,7 @@ def run_single(config: RunConfig) -> dict:
         "output_dir": str(output_dir),
         "total_runtime": total_runtime,
         "perplexity": ppl,
+        "version": version,
     }
 
 
@@ -316,8 +318,8 @@ def _write_sweep_summary_md(results: list[dict], sweep_dir: Path) -> None:
     """Write summary.md to *sweep_dir* from the current results list."""
     lines = [
         "# Sweep Summary\n",
-        "| Run | Resolved | Total | % Resolved | PPL | Runtime | Exceptions | Error |",
-        "|-----|----------|-------|------------|-----|---------|------------|-------|",
+        "| Run | Resolved | Total | % Resolved | PPL | Runtime | Version | Exceptions | Error |",
+        "|-----|----------|-------|------------|-----|---------|---------|------------|-------|",
     ]
     for r in results:
         resolved, total, pct = parse_results(r.get("results", {}))
@@ -325,8 +327,9 @@ def _write_sweep_summary_md(results: list[dict], sweep_dir: Path) -> None:
         exceptions = _fmt_exceptions(r.get("results", {}))
         error = r.get("error", "")
         ppl = f"{r['perplexity']:.2f}" if r.get("perplexity") else "—"
+        version = r.get("version") or "—"
         lines.append(
-            f"| {r['name']} | {resolved} | {total} | {pct:.1f}% | {ppl} | {runtime} | {exceptions} | {error} |"
+            f"| {r['name']} | {resolved} | {total} | {pct:.1f}% | {ppl} | {runtime} | {version} | {exceptions} | {error} |"
         )
     (sweep_dir / "summary.md").write_text("\n".join(lines) + "\n")
 
@@ -339,6 +342,7 @@ def _print_sweep_summary(results: list[dict]) -> None:
     table.add_column("Total", justify="right")
     table.add_column("% Resolved", justify="right")
     table.add_column("PPL", justify="right")
+    table.add_column("Version", justify="right")
     table.add_column("Exceptions", style="red")
     table.add_column("Runtime", justify="right")
     table.add_column("Error", style="red")
@@ -348,10 +352,12 @@ def _print_sweep_summary(results: list[dict]) -> None:
         name = r["name"]
         error = r.get("error", "")
         ppl = f"{r['perplexity']:.2f}" if r.get("perplexity") else "—"
+        version = r.get("version") or "—"
         if error:
             name += " [red](failed)[/red]"
         table.add_row(
             name, str(resolved), str(total), f"{pct:.1f}%", ppl,
+            version,
             _fmt_exceptions(r.get("results", {})),
             _fmt_runtime(r.get("total_runtime")), error,
         )

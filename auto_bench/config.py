@@ -177,8 +177,9 @@ class PerplexityConfig(BaseModel):
     dataset: str = "wikitext"
     dataset_name: str = "wikitext-2-raw-v1"
     split: str = "test"
-    max_tokens: int = 10_000
-    chunk_chars: int = 2000
+    max_chars: int = 40_000
+    chunk_chars: int = 4096
+    stride_chars: int = 2048
 
 
 class EvaluationConfig(BaseModel):
