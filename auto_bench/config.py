@@ -182,9 +182,14 @@ class PerplexityConfig(BaseModel):
     stride_chars: int = 2048
 
 
+class KLDivConfig(BaseModel):
+    enabled: bool = True  # only active in sweep mode; silently skipped for single runs
+
+
 class EvaluationConfig(BaseModel):
     run_evaluation: bool = True
     perplexity: PerplexityConfig = Field(default_factory=PerplexityConfig)
+    kl_divergence: KLDivConfig = Field(default_factory=KLDivConfig)
 
 
 # ---------------------------------------------------------------------------

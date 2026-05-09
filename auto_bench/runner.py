@@ -154,10 +154,10 @@ def serve_model(config: RunConfig, dry_run: bool = False) -> None:
             remove_from_cache(model_path)
 
 
-def run_single(config: RunConfig) -> dict:
+def run_single(config: RunConfig, ref_logprobs: list[float] | None = None) -> dict:
     """
     Run a single (non-sweep) pipeline: download → start → agent → stop → evaluate.
-    Returns result summary dict.
+    Returns result summary dict.  Includes 'logprobs' key when perplexity is computed.
     """
     t_start = time.monotonic()
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -179,15 +179,29 @@ def run_single(config: RunConfig) -> dict:
     console.print("\n[bold]Step 2/4:[/bold] Starting backend server...")
     _start_backend(backend, model_path, output_dir)
 
-    # 2.5 Perplexity (optional)
+    # 2.5 Perplexity + KL divergence (optional)
     ppl: float | None = None
-    if config.evaluation.perplexity.enabled:
+    logprobs: list[float] | None = None
+    kl: float | None = None
+
+    needs_logprobs = config.evaluation.perplexity.enabled or (
+        config.evaluation.kl_divergence.enabled and ref_logprobs is not None
+    )
+    if needs_logprobs:
         from .perplexity import compute_perplexity
 
         console.print("\n[bold]Computing perplexity...[/bold]")
         t0 = time.monotonic()
-        ppl = compute_perplexity(backend, config.evaluation.perplexity)
-        console.print(f"[green]Perplexity:[/green] {ppl:.2f} ({time.monotonic() - t0:.1f}s)")
+        ppl_val, logprobs = compute_perplexity(backend, config.evaluation.perplexity)
+        ppl = ppl_val if config.evaluation.perplexity.enabled else None
+        if config.evaluation.perplexity.enabled:
+            console.print(f"[green]Perplexity:[/green] {ppl_val:.2f} ({time.monotonic() - t0:.1f}s)")
+        (output_dir / "logprobs.json").write_text(json.dumps(logprobs))
+
+        if ref_logprobs is not None and config.evaluation.kl_divergence.enabled:
+            from .perplexity import compute_kl_divergence
+            kl = compute_kl_divergence(ref_logprobs, logprobs)
+            console.print(f"[green]KL divergence:[/green] {kl:.4f}")
 
     agent_output: Path | None = None
     results: dict = {}
@@ -232,7 +246,7 @@ def run_single(config: RunConfig) -> dict:
     total_runtime = time.monotonic() - t_start
     version = backend.get_version()
     (output_dir / "run_meta.json").write_text(
-        json.dumps({"perplexity": ppl, "total_runtime": total_runtime, "version": version})
+        json.dumps({"perplexity": ppl, "kl_divergence": kl, "total_runtime": total_runtime, "version": version})
     )
     return {
         "run_id": run_id,
@@ -242,6 +256,8 @@ def run_single(config: RunConfig) -> dict:
         "output_dir": str(output_dir),
         "total_runtime": total_runtime,
         "perplexity": ppl,
+        "kl_divergence": kl,
+        "logprobs": logprobs,
         "version": version,
     }
 
@@ -276,14 +292,26 @@ def run_pipeline(config: RunConfig, *, resume_from: Path | None = None) -> list[
     for run_config in runs_to_do:
         run_config.output_dir = str(sweep_dir)
 
+    # Load reference logprobs from first completed entry (for KL divergence)
+    ref_logprobs: list[float] | None = None
+    if is_sweep and all_results:
+        lp_file = Path(all_results[0]["output_dir"]) / "logprobs.json"
+        if lp_file.exists():
+            ref_logprobs = json.loads(lp_file.read_text())
+
     total = len(runs_to_do) + len(all_results)
     for i, run_config in enumerate(runs_to_do):
         if is_sweep:
             done = len(all_results) + i
             console.rule(f"[bold magenta]Sweep {done + 1}/{total}: {run_config.name}")
 
+        actual_idx = len(all_results)
         try:
-            result = run_single(run_config)
+            result = run_single(run_config, ref_logprobs=ref_logprobs if actual_idx > 0 else None)
+            if ref_logprobs is None:
+                ref_logprobs = result.pop("logprobs", None)
+            else:
+                result.pop("logprobs", None)
             all_results.append(result)
         except Exception as exc:
             console.print(f"[red]Entry '{run_config.name}' failed: {exc}[/red]")
@@ -314,12 +342,16 @@ def _fmt_exceptions(results: dict) -> str:
     return ", ".join(parts)
 
 
+def _fmt_kl(kl: float | None) -> str:
+    return f"{kl:.4f}" if kl is not None else "—"
+
+
 def _write_sweep_summary_md(results: list[dict], sweep_dir: Path) -> None:
     """Write summary.md to *sweep_dir* from the current results list."""
     lines = [
         "# Sweep Summary\n",
-        "| Run | Resolved | Total | % Resolved | PPL | Runtime | Version | Exceptions | Error |",
-        "|-----|----------|-------|------------|-----|---------|---------|------------|-------|",
+        "| Run | Resolved | Total | % Resolved | PPL | KL | Runtime | Version | Exceptions | Error |",
+        "|-----|----------|-------|------------|-----|----|---------|---------|------------|-------|",
     ]
     for r in results:
         resolved, total, pct = parse_results(r.get("results", {}))
@@ -327,9 +359,10 @@ def _write_sweep_summary_md(results: list[dict], sweep_dir: Path) -> None:
         exceptions = _fmt_exceptions(r.get("results", {}))
         error = r.get("error", "")
         ppl = f"{r['perplexity']:.2f}" if r.get("perplexity") else "—"
+        kl = _fmt_kl(r.get("kl_divergence"))
         version = r.get("version") or "—"
         lines.append(
-            f"| {r['name']} | {resolved} | {total} | {pct:.1f}% | {ppl} | {runtime} | {version} | {exceptions} | {error} |"
+            f"| {r['name']} | {resolved} | {total} | {pct:.1f}% | {ppl} | {kl} | {runtime} | {version} | {exceptions} | {error} |"
         )
     (sweep_dir / "summary.md").write_text("\n".join(lines) + "\n")
 
@@ -342,6 +375,7 @@ def _print_sweep_summary(results: list[dict]) -> None:
     table.add_column("Total", justify="right")
     table.add_column("% Resolved", justify="right")
     table.add_column("PPL", justify="right")
+    table.add_column("KL", justify="right")
     table.add_column("Version", justify="right")
     table.add_column("Exceptions", style="red")
     table.add_column("Runtime", justify="right")
@@ -352,11 +386,12 @@ def _print_sweep_summary(results: list[dict]) -> None:
         name = r["name"]
         error = r.get("error", "")
         ppl = f"{r['perplexity']:.2f}" if r.get("perplexity") else "—"
+        kl = _fmt_kl(r.get("kl_divergence"))
         version = r.get("version") or "—"
         if error:
             name += " [red](failed)[/red]"
         table.add_row(
-            name, str(resolved), str(total), f"{pct:.1f}%", ppl,
+            name, str(resolved), str(total), f"{pct:.1f}%", ppl, kl,
             version,
             _fmt_exceptions(r.get("results", {})),
             _fmt_runtime(r.get("total_runtime")), error,

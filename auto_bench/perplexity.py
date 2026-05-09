@@ -34,10 +34,11 @@ def _extract_logprobs(logprobs_data: dict) -> tuple[list[float | None], list[int
         return lps, offsets
 
 
-def compute_perplexity(backend: Backend, cfg: PerplexityConfig) -> float:
+def compute_perplexity(backend: Backend, cfg: PerplexityConfig) -> tuple[float, list[float]]:
+    """Return (perplexity, per-token log-probs) over the evaluation corpus."""
     text = _load_text(cfg)
 
-    total_nll, total_tokens = 0.0, 0
+    all_logprobs: list[float] = []
     with httpx.Client(timeout=120) as client:
         for i in range(0, len(text), cfg.stride_chars):
             context_start = max(0, i - (cfg.chunk_chars - cfg.stride_chars))
@@ -66,8 +67,15 @@ def compute_perplexity(backend: Backend, cfg: PerplexityConfig) -> float:
             else:
                 start_idx = round(len(lps) * actual_context_chars / len(prompt)) if prompt else 0
 
-            valid = [lp for lp in lps[start_idx:] if lp is not None]
-            total_nll += -sum(valid)
-            total_tokens += len(valid)
+            all_logprobs.extend(lp for lp in lps[start_idx:] if lp is not None)
 
-    return math.exp(total_nll / total_tokens) if total_tokens else float("inf")
+    if not all_logprobs:
+        return float("inf"), []
+    nll = -sum(all_logprobs) / len(all_logprobs)
+    return math.exp(nll), all_logprobs
+
+
+def compute_kl_divergence(ref: list[float], cand: list[float]) -> float:
+    """D_KL(ref ∥ cand) ≈ mean(log_ref − log_cand) per token."""
+    n = min(len(ref), len(cand))
+    return sum(r - c for r, c in zip(ref[:n], cand[:n])) / n
