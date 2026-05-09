@@ -154,10 +154,15 @@ def serve_model(config: RunConfig, dry_run: bool = False) -> None:
             remove_from_cache(model_path)
 
 
-def run_single(config: RunConfig, ref_logprobs: list[float] | None = None) -> dict:
+def run_single(
+    config: RunConfig,
+    logits_save: Path | None = None,
+    logits_base: Path | None = None,
+) -> dict:
     """
-    Run a single (non-sweep) pipeline: download → start → agent → stop → evaluate.
-    Returns result summary dict.  Includes 'logprobs' key when perplexity is computed.
+    Run a single (non-sweep) pipeline: download → start → agent → stop → ppl → evaluate.
+    logits_save: path to save reference logits (llamacpp sweep reference entry).
+    logits_base: path to load reference logits for KL computation.
     """
     t_start = time.monotonic()
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -175,48 +180,50 @@ def run_single(config: RunConfig, ref_logprobs: list[float] | None = None) -> di
     console.print("\n[bold]Step 1/4:[/bold] Downloading model...")
     model_path = _download(backend)
 
-    # 2. Start backend server
-    console.print("\n[bold]Step 2/4:[/bold] Starting backend server...")
-    _start_backend(backend, model_path, output_dir)
-
-    # 2.5 Perplexity + KL divergence (optional)
+    # 2. Perplexity + KL divergence (llamacpp only; before server start to avoid VRAM conflict)
     ppl: float | None = None
-    logprobs: list[float] | None = None
     kl: float | None = None
 
-    needs_logprobs = config.evaluation.perplexity.enabled or (
-        config.evaluation.kl_divergence.enabled and ref_logprobs is not None
-    )
-    if needs_logprobs:
-        from .perplexity import compute_perplexity
+    ppl_cfg = config.evaluation.perplexity
+    kl_cfg = config.evaluation.kl_divergence
+    wants_ppl = ppl_cfg.enabled and config.backend.type == "llamacpp"
+    wants_kl = kl_cfg.enabled and config.backend.type == "llamacpp" and (logits_save or logits_base)
 
-        console.print("\n[bold]Computing perplexity...[/bold]")
+    if wants_ppl or wants_kl:
+        from .perplexity import _load_text, run_llama_perplexity
+
+        console.print("\n[bold]Step 2/4:[/bold] Computing perplexity...")
         t0 = time.monotonic()
-        ppl_val, logprobs = compute_perplexity(backend, config.evaluation.perplexity)
-        ppl = ppl_val if config.evaluation.perplexity.enabled else None
-        if config.evaluation.perplexity.enabled:
-            console.print(f"[green]Perplexity:[/green] {ppl_val:.2f} ({time.monotonic() - t0:.1f}s)")
-        (output_dir / "logprobs.json").write_text(json.dumps(logprobs))
+        text = _load_text(ppl_cfg)
+        ppl, kl = run_llama_perplexity(
+            cmd_template=config.backend.llamacpp.perplexity_cmd_template,
+            model_path=model_path,
+            text=text,
+            n_gpu_layers=config.backend.llamacpp.n_gpu_layers,
+            ctx_size=config.backend_options.ctx_size,
+            logits_save=logits_save,
+            logits_base=logits_base,
+        )
+        console.print(f"[green]Perplexity:[/green] {ppl:.4f} ({time.monotonic() - t0:.1f}s)")
+        if kl is not None:
+            console.print(f"[green]KL divergence:[/green] {kl:.6f}")
 
-        if ref_logprobs is not None and config.evaluation.kl_divergence.enabled:
-            from .perplexity import compute_kl_divergence
-            kl = compute_kl_divergence(ref_logprobs, logprobs)
-            console.print(f"[green]KL divergence:[/green] {kl:.4f}")
+    # 3. Start backend server
+    console.print("\n[bold]Step 3/4:[/bold] Starting backend server...")
+    _start_backend(backend, model_path, output_dir)
 
     agent_output: Path | None = None
     results: dict = {}
 
     try:
-        # 3. Run Harbor
-        console.print("\n[bold]Step 3/4:[/bold] Running Harbor agent...")
+        # 4. Run Harbor
+        console.print("\n[bold]Step 4/4:[/bold] Running Harbor agent...")
         t0 = time.monotonic()
         agent_output = run_agent(config, backend, output_dir)
         console.print(f"[dim]Agent done in {time.monotonic()-t0:.1f}s[/dim]")
         backend.check_alive()
 
     finally:
-        # 4. Stop backend (always, even on failure)
-        console.print("\n[bold]Step 4/4:[/bold] Stopping backend server...")
         backend.stop()
         if config.remove_downloaded_models and not was_cached:
             remove_from_cache(model_path)
@@ -257,7 +264,6 @@ def run_single(config: RunConfig, ref_logprobs: list[float] | None = None) -> di
         "total_runtime": total_runtime,
         "perplexity": ppl,
         "kl_divergence": kl,
-        "logprobs": logprobs,
         "version": version,
     }
 
@@ -292,12 +298,10 @@ def run_pipeline(config: RunConfig, *, resume_from: Path | None = None) -> list[
     for run_config in runs_to_do:
         run_config.output_dir = str(sweep_dir)
 
-    # Load reference logprobs from first completed entry (for KL divergence)
-    ref_logprobs: list[float] | None = None
-    if is_sweep and all_results:
-        lp_file = Path(all_results[0]["output_dir"]) / "logprobs.json"
-        if lp_file.exists():
-            ref_logprobs = json.loads(lp_file.read_text())
+    # Logits file for KL divergence (llamacpp sweep only)
+    ref_logits: Path | None = None
+    if is_sweep and config.backend.type == "llamacpp" and config.evaluation.kl_divergence.enabled:
+        ref_logits = sweep_dir / "reference_logits.bin"
 
     total = len(runs_to_do) + len(all_results)
     for i, run_config in enumerate(runs_to_do):
@@ -306,12 +310,13 @@ def run_pipeline(config: RunConfig, *, resume_from: Path | None = None) -> list[
             console.rule(f"[bold magenta]Sweep {done + 1}/{total}: {run_config.name}")
 
         actual_idx = len(all_results)
+        is_reference = is_sweep and actual_idx == 0
         try:
-            result = run_single(run_config, ref_logprobs=ref_logprobs if actual_idx > 0 else None)
-            if ref_logprobs is None:
-                ref_logprobs = result.pop("logprobs", None)
-            else:
-                result.pop("logprobs", None)
+            result = run_single(
+                run_config,
+                logits_save=ref_logits if is_reference else None,
+                logits_base=ref_logits if (ref_logits and ref_logits.exists() and not is_reference) else None,
+            )
             all_results.append(result)
         except Exception as exc:
             console.print(f"[red]Entry '{run_config.name}' failed: {exc}[/red]")
@@ -322,6 +327,8 @@ def run_pipeline(config: RunConfig, *, resume_from: Path | None = None) -> list[
 
     if is_sweep:
         _print_sweep_summary(all_results)
+        if ref_logits and ref_logits.exists():
+            ref_logits.unlink()
 
     return all_results
 

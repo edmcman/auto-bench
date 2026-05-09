@@ -60,7 +60,7 @@ Backend (ABC)
 **ModelConfig** — `source` (huggingface/local), `repo_id`, `filename` (GGUF only), `revision`, `local_path`, `allow_patterns`/`ignore_patterns` (vLLM only), `sweep` (list of `SweepEntry`)
 
 **BackendConfig** — `type` (llamacpp/vllm/openai), `host`, `port`, `startup_timeout`, `docker_gateway`
-- `LlamaCppConfig`: `binary`, `n_gpu_layers` (int or "auto"/"all"), `parallel`, `extra_args`
+- `LlamaCppConfig`: `cmd_template`, `perplexity_cmd_template`, `n_gpu_layers` (int or "auto"/"all"), `parallel`, `extra_args`
 - `VllmConfig`: `dtype`, `gpu_memory_utilization`, `tensor_parallel_size`, `pipeline_parallel_size`, `quantization`, `enforce_eager`, `max_num_seqs`, `api_key`, `chat_template`, `extra_args`
 - `OpenAIConfig`: `base_url`, `api_key`, `model`
 
@@ -99,3 +99,4 @@ Evaluation happens inline during `run`, not as a separate CLI command. `collect_
 - **Docker gateway**: Set `backend.docker_gateway` to the IP/hostname Docker containers use to reach the host. Default `172.17.0.1` works on Linux. On macOS with Docker Desktop use `host.docker.internal`.
 - **OpenHands --ak defaults**: `version="0.57.0"` and `python_version="3.12"` are automatically prepended to `--ak` for OpenHands as a workaround for a Harbor bug, unless already specified in `agent_kwargs`.
 - **Context size**: Set via `backend_options.ctx_size` (llamacpp) or `backend_options.max_model_len` (vllm). These are experiment-level settings separate from backend-specific config.
+- **Perplexity/KL**: Only supported for `type: llamacpp`. Uses `llama-perplexity` (configured via `LlamaCppConfig.perplexity_cmd_template`, default `"llama-perplexity --model {model} --file {file} {args}"`). Runs before the server starts to avoid VRAM conflicts. In sweep mode, the first entry saves a reference logits file (`reference_logits.bin` in the sweep dir) via `--save-all-logits`; subsequent entries compute KL divergence against it via `--kl-divergence`.

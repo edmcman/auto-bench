@@ -62,6 +62,7 @@ class ModelConfig(BaseModel):
 
 class LlamaCppConfig(BaseModel):
     cmd_template: str = "llama-server --model {model} --host {host} --port {port} {args}"
+    perplexity_cmd_template: str = "llama-perplexity --model {model} --file {file} {args}"
     n_gpu_layers: int | str = "auto"
     parallel: int = 1
     auto_fit: bool = True
@@ -183,7 +184,7 @@ class PerplexityConfig(BaseModel):
 
 
 class KLDivConfig(BaseModel):
-    enabled: bool = True  # only active in sweep mode; silently skipped for single runs
+    enabled: bool = True  # only active in sweep mode with llamacpp backends
 
 
 class EvaluationConfig(BaseModel):

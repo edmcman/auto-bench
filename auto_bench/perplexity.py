@@ -1,13 +1,13 @@
-"""Compute perplexity via the OpenAI-compatible completions endpoint."""
+"""Compute perplexity and KL divergence via llama-perplexity."""
 from __future__ import annotations
 
-import math
+import re
+import subprocess
+import tempfile
+from pathlib import Path
 from typing import TYPE_CHECKING
 
-import httpx
-
 if TYPE_CHECKING:
-    from .backends.base import Backend
     from .config import PerplexityConfig
 
 
@@ -19,63 +19,63 @@ def _load_text(cfg: PerplexityConfig) -> str:
     return text[: cfg.max_chars]
 
 
-def _extract_logprobs(logprobs_data: dict) -> tuple[list[float | None], list[int] | None]:
-    if "token_logprobs" in logprobs_data:
-        # OpenAI / vLLM: text_offset gives char offset of each token
-        return logprobs_data["token_logprobs"], logprobs_data.get("text_offset")
+def run_llama_perplexity(
+    cmd_template: str,
+    model_path: str,
+    text: str,
+    n_gpu_layers: int | str,
+    ctx_size: int | None = None,
+    logits_save: Path | None = None,
+    logits_base: Path | None = None,
+) -> tuple[float, float | None]:
+    """Run llama-perplexity and return (ppl, kl). kl is None unless logits_base is given."""
+    ngl = 999 if n_gpu_layers in ("auto", "all") else int(n_gpu_layers)
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+        f.write(text)
+        text_file = Path(f.name)
+
+    try:
+        extra: list[str] = ["-ngl", str(ngl), "--no-mmap"]
+        if ctx_size:
+            extra += ["-c", str(ctx_size)]
+        if logits_save:
+            extra += ["--save-all-logits", str(logits_save)]
+        if logits_base:
+            extra += ["--kl-divergence", "--kl-divergence-base", str(logits_base)]
+
+        cmd_str = cmd_template.format(
+            model=model_path,
+            file=str(text_file),
+            args=" ".join(extra),
+        )
+        cmd = cmd_str.split()
+
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=7200)
+        output = proc.stderr + proc.stdout
+
+        if proc.returncode != 0:
+            raise RuntimeError(f"llama-perplexity failed (rc={proc.returncode}):\n{output[-2000:]}")
+
+        ppl = _parse_ppl(output, kl_mode=logits_base is not None)
+        kl = _parse_kl(output) if logits_base else None
+        return ppl, kl
+    finally:
+        text_file.unlink(missing_ok=True)
+
+
+def _parse_ppl(output: str, kl_mode: bool = False) -> float:
+    if kl_mode:
+        m = re.search(r"Mean PPL\(Q\)\s*:\s*([\d.]+)", output)
     else:
-        # llama.cpp: reconstruct offsets from token text
-        items = logprobs_data["content"]
-        lps = [item["logprob"] for item in items]
-        offsets, pos = [], 0
-        for item in items:
-            offsets.append(pos)
-            pos += len(item["token"])
-        return lps, offsets
+        m = re.search(r"Final estimate:\s*PPL\s*=\s*([\d.]+)", output)
+    if not m:
+        raise ValueError(f"Could not parse PPL from output:\n{output[-1000:]}")
+    return float(m.group(1))
 
 
-def compute_perplexity(backend: Backend, cfg: PerplexityConfig) -> tuple[float, list[float]]:
-    """Return (perplexity, per-token log-probs) over the evaluation corpus."""
-    text = _load_text(cfg)
-
-    all_logprobs: list[float] = []
-    with httpx.Client(timeout=120) as client:
-        for i in range(0, len(text), cfg.stride_chars):
-            context_start = max(0, i - (cfg.chunk_chars - cfg.stride_chars))
-            chunk_end = min(len(text), i + cfg.stride_chars)
-            prompt = text[context_start:chunk_end]
-            actual_context_chars = i - context_start
-
-            if not prompt.strip():
-                continue
-
-            resp = client.post(
-                f"{backend.base_url}/completions",
-                json={
-                    "model": backend.model_name,
-                    "prompt": prompt,
-                    "max_tokens": 1,
-                    "echo": True,
-                    "logprobs": 1,
-                },
-            )
-            resp.raise_for_status()
-            lps, offsets = _extract_logprobs(resp.json()["choices"][0]["logprobs"])
-
-            if offsets is not None:
-                start_idx = next((j for j, off in enumerate(offsets) if off >= actual_context_chars), len(lps))
-            else:
-                start_idx = round(len(lps) * actual_context_chars / len(prompt)) if prompt else 0
-
-            all_logprobs.extend(lp for lp in lps[start_idx:] if lp is not None)
-
-    if not all_logprobs:
-        return float("inf"), []
-    nll = -sum(all_logprobs) / len(all_logprobs)
-    return math.exp(nll), all_logprobs
-
-
-def compute_kl_divergence(ref: list[float], cand: list[float]) -> float:
-    """D_KL(ref ∥ cand) ≈ mean(log_ref − log_cand) per token."""
-    n = min(len(ref), len(cand))
-    return sum(r - c for r, c in zip(ref[:n], cand[:n])) / n
+def _parse_kl(output: str) -> float:
+    m = re.search(r"Mean\s+KLD\s*:\s*([\d.]+)", output)
+    if not m:
+        raise ValueError(f"Could not parse KLD from output:\n{output[-1000:]}")
+    return float(m.group(1))
