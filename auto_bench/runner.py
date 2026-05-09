@@ -61,9 +61,9 @@ def _is_model_cached(config: RunConfig) -> bool:
 
 
 def _is_entry_complete(entry_dir: Path) -> bool:
-    """Return True if *entry_dir* has Harbor evaluation results."""
+    """Return True if *entry_dir* has Harbor job results (instance result.json files)."""
     jobs_dir = entry_dir / "jobs"
-    return jobs_dir.is_dir() and bool(list(jobs_dir.rglob("verifier/reward.txt")))
+    return jobs_dir.is_dir() and bool(list(jobs_dir.glob("*/*/result.json")))
 
 
 def _find_completed_entries(sweep_dir: Path) -> set[str]:
