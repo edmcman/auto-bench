@@ -145,6 +145,20 @@ def serve(
     serve_model(runs[0], dry_run=dry_run)
 
 
+@app.command()
+def chart(
+    sweep_dir: Path = typer.Argument(..., help="Sweep output directory", exists=True, file_okay=False),
+):
+    """Plot KL divergence vs resolve rate for a completed sweep."""
+    from .runner import _collect_previous_results
+    from .chart import plot_kl_vs_resolves
+
+    results = _collect_previous_results(sweep_dir)
+    out = sweep_dir / "kl_vs_resolves.png"
+    plot_kl_vs_resolves(results, out)
+    console.print(f"[green]Chart saved:[/green] {out}")
+
+
 def main():
     app()
 

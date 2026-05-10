@@ -18,6 +18,7 @@ dependencies = [
     "swebench>=3.0",
     "datasets>=2.0",
     # Harbor is invoked via `uvx harbor run` (uv must be installed separately)
+    "matplotlib>=3.7",
 ]
 
 [project.scripts]
