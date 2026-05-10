@@ -1,6 +1,7 @@
 """Top-level orchestration: download → start → agent → stop → evaluate."""
 from __future__ import annotations
 
+import csv
 import json
 import time
 from datetime import datetime
@@ -324,6 +325,7 @@ def run_pipeline(config: RunConfig, *, resume_from: Path | None = None) -> list[
 
         if is_sweep:
             _write_sweep_summary_md(all_results, sweep_dir)
+            _write_sweep_csv(all_results, sweep_dir)
 
     if is_sweep:
         _print_sweep_summary(all_results)
@@ -374,6 +376,29 @@ def _write_sweep_summary_md(results: list[dict], sweep_dir: Path) -> None:
     (sweep_dir / "summary.md").write_text("\n".join(lines) + "\n")
 
 
+def _write_sweep_csv(results: list[dict], sweep_dir: Path) -> None:
+    fields = ["name", "resolved", "total", "pct_resolved", "perplexity",
+              "kl_divergence", "runtime_seconds", "version", "exceptions", "error", "output_dir"]
+    with (sweep_dir / "results.csv").open("w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=fields)
+        w.writeheader()
+        for r in results:
+            resolved, total, pct = parse_results(r.get("results", {}))
+            w.writerow({
+                "name": r["name"],
+                "resolved": resolved,
+                "total": total,
+                "pct_resolved": round(pct, 4),
+                "perplexity": r.get("perplexity") or "",
+                "kl_divergence": r.get("kl_divergence") or "",
+                "runtime_seconds": r.get("total_runtime") or "",
+                "version": r.get("version") or "",
+                "exceptions": _fmt_exceptions(r.get("results", {})),
+                "error": r.get("error", ""),
+                "output_dir": r.get("output_dir", ""),
+            })
+
+
 def _print_sweep_summary(results: list[dict]) -> None:
     console.rule("[bold]Sweep Summary")
     table = Table(show_header=True, header_style="bold cyan")
@@ -409,6 +434,7 @@ def _print_sweep_summary(results: list[dict]) -> None:
     if results:
         sweep_dir = Path(results[0]["output_dir"]).parent
         _write_sweep_summary_md(results, sweep_dir)
+        _write_sweep_csv(results, sweep_dir)
         console.print(f"[dim]Summary saved to {sweep_dir / 'summary.md'}[/dim]")
         try:
             from .chart import plot_kl_vs_resolves
