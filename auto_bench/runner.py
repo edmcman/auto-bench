@@ -410,3 +410,10 @@ def _print_sweep_summary(results: list[dict]) -> None:
         sweep_dir = Path(results[0]["output_dir"]).parent
         _write_sweep_summary_md(results, sweep_dir)
         console.print(f"[dim]Summary saved to {sweep_dir / 'summary.md'}[/dim]")
+        try:
+            from .chart import plot_kl_vs_resolves
+            chart_path = sweep_dir / "kl_vs_resolves.png"
+            plot_kl_vs_resolves(results, chart_path)
+            console.print(f"[dim]Chart saved to {chart_path}[/dim]")
+        except ValueError:
+            pass
