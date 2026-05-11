@@ -71,7 +71,7 @@ def run(
         cfg.evaluation.run_evaluation = False
 
     if resume:
-        resume_from = _find_latest_sweep_dir(Path(cfg.output_dir))
+        resume_from = _find_latest_sweep_dir(Path(cfg.output_dir), cfg.name)
         if resume_from is None:
             console.print(f"[red]No sweep directories found in {cfg.output_dir}[/red]")
             raise typer.Exit(1)
