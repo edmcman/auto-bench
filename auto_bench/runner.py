@@ -62,9 +62,16 @@ def _is_model_cached(config: RunConfig) -> bool:
 
 
 def _is_entry_complete(entry_dir: Path) -> bool:
-    """Return True if *entry_dir* has Harbor job results (instance result.json files)."""
-    jobs_dir = entry_dir / "jobs"
-    return jobs_dir.is_dir() and bool(list(jobs_dir.glob("*/*/result.json")))
+    """Return True if *entry_dir* has a run_meta.json (run_single finished successfully)."""
+    return (entry_dir / "run_meta.json").exists()
+
+
+def _parse_entry_name(dir_name: str) -> str | None:
+    """Strip _YYYYMMDD_HHMMSS suffix from directory name. Returns None if unparseable."""
+    parts = dir_name.rsplit("_", 2)
+    if len(parts) < 3:
+        return None
+    return parts[0]
 
 
 def _find_completed_entries(sweep_dir: Path) -> set[str]:
@@ -76,9 +83,9 @@ def _find_completed_entries(sweep_dir: Path) -> set[str]:
         if not child.is_dir():
             continue
         if _is_entry_complete(child):
-            # Directory names are {name}_{YYYYMMDD_HHMMSS} — strip trailing timestamp
-            name = "_".join(child.name.rsplit("_", 2)[:-2])
-            completed.add(name)
+            name = _parse_entry_name(child.name)
+            if name:
+                completed.add(name)
     return completed
 
 
@@ -88,7 +95,9 @@ def _collect_previous_results(sweep_dir: Path) -> list[dict]:
     for child in sorted(sweep_dir.iterdir()):
         if not child.is_dir() or not _is_entry_complete(child):
             continue
-        name = "_".join(child.name.rsplit("_", 2)[:-2])
+        name = _parse_entry_name(child.name)
+        if name is None:
+            continue
         meta_file = child / "run_meta.json"
         meta = json.loads(meta_file.read_text()) if meta_file.exists() else {}
         results.append({
