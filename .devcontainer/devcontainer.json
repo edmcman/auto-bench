@@ -13,6 +13,7 @@
 		},
 		"ghcr.io/devcontainers-extra/features/uv:1": {},
 		"./features/llama-cpp": {},
+		"./features/docker-config": {},
 		"ghcr.io/devcontainers/features/nvidia-cuda:3": {
           "installToolkit": true
         }
@@ -24,7 +25,22 @@
 		"LOCAL_WORKSPACE_FOLDER": "${localWorkspaceFolder}"
 	},
 
-	"runArgs": ["--gpus", "device=7"]
+	"runArgs": ["--gpus", "device=7", "-p", "8085:8085"],
+	"mounts": [
+		{
+			"type": "volume",
+			"source": "auto-bench-config",
+			"target": "/home/vscode/.config"
+		},
+		{
+			"type": "volume",
+			"source": "auto-bench-cache",
+			"target": "/home/vscode/.cache"
+		}
+	],
+	"postCreateCommand": "mkdir -p /home/vscode/.config /home/vscode/.cache && sudo chown -R vscode:vscode /home/vscode/.config /home/vscode/.cache",
+	// This forwards to the local machine, which could be useful for debugging?
+	"forwardPorts": [8085],
 
 	// Use 'forwardPorts' to make a list of ports inside the container available locally.
 	// "forwardPorts": [],

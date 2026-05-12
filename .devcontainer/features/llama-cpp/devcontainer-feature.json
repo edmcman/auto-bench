@@ -3,7 +3,6 @@
   "name": "llama.cpp",
   "version": "1.0.0",
   "description": "Installs and builds llama.cpp inside the devcontainer.",
-  "platforms": ["linux/*"],  
-  "installsAfter": ["ghcr.io/devcontainers/features/nvidia-cuda"],
+  #"installsAfter": ["ghcr.io/devcontainers/features/nvidia-cuda"],
   "postCreateCommand": "sudo llama-cpp-build.sh"
 }

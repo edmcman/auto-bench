@@ -1,0 +1,7 @@
+{
+  "id": "docker-config",
+  "name": "Docker config install",
+  "version": "1.0.0",
+  "description": "Installs ~/.docker/config.json from the host into the container if it exists.",
+  "postCreateCommand": ".devcontainer/features/docker-config/install.sh"
+}
