@@ -74,7 +74,7 @@ Backend (ABC)
 
 ### Agent Invocation (`agent.py`)
 
-Builds and runs `uvx harbor run`. Harbor runs the agent (e.g. OpenHands) inside Docker containers; the container reaches the local inference server via `backend.docker_gateway` (default `172.17.0.1`; use `host.docker.internal` on macOS/Docker Desktop). Harbor's output lands in a `jobs/` directory under the run's output dir.
+Builds and runs `uvx harbor run`. Harbor runs the agent (e.g. OpenHands) inside Docker containers. The `OPENAI_BASE_URL` passed to containers is built from `docker_gateway:port` (not `host`), since `host` is the host-side bind address and `docker_gateway` is the address containers use to reach the host. Harbor's output lands in a `jobs/` directory under the run's output dir.
 
 Harbor flag mapping from `AgentConfig`:
 - `attempts` → `-k` (attempts per instance)
@@ -96,7 +96,7 @@ Evaluation happens inline during `run`, not as a separate CLI command. `collect_
 - **Two-tier config**: Experiment YAML describes what to run; `~/.config/auto-bench/local.yaml` describes how to run it (host, ports, tokens). This keeps experiment configs portable.
 - **Sweep mode**: A single YAML with `model.sweep` produces a comparison table and `summary.md`. Each sweep entry can set `filename`, `sampling`, and arbitrary `overrides` for deep-merging into the run config (e.g. `backend_options.ctx_size`).
 - **OpenAI backend as base class**: `type: openai` skips download/start/stop entirely and points at an already-running server. `LlamaCppBackend` and `VllmBackend` inherit from it for shared properties like `model_name` and `base_url`.
-- **Docker gateway**: Set `backend.docker_gateway` to the IP/hostname Docker containers use to reach the host. Default `172.17.0.1` works on Linux. On macOS with Docker Desktop use `host.docker.internal`.
+- **Docker gateway vs host**: `host` is the address the server binds on (host-side). `docker_gateway` is the address containers use to reach the host. They default to the same value (`172.17.0.1` on Linux, `host.docker.internal` on macOS/Docker Desktop) but differ when, e.g., the server binds on `127.0.0.1` while containers still need the bridge IP.
 - **OpenHands --ak defaults**: `version="0.57.0"` and `python_version="3.12"` are automatically prepended to `--ak` for OpenHands as a workaround for a Harbor bug, unless already specified in `agent_kwargs`.
 - **Context size**: Set via `backend_options.ctx_size` (llamacpp) or `backend_options.max_model_len` (vllm). These are experiment-level settings separate from backend-specific config.
 - **Perplexity/KL**: Only supported for `type: llamacpp`. Uses `llama-perplexity` (configured via `LlamaCppConfig.perplexity_cmd_template`, default `"llama-perplexity --model {model} --file {file} {args}"`). Runs before the server starts to avoid VRAM conflicts. In sweep mode, the first entry saves a reference logits file (`reference_logits.bin` in the sweep dir) via `--save-all-logits`; subsequent entries compute KL divergence against it via `--kl-divergence`.

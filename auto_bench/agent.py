@@ -33,9 +33,9 @@ def _normalize_dataset(dataset: str) -> str:
     return _HARBOR_DATASET_MAP.get(dataset, dataset.lower())
 
 
-def _docker_base_url(base_url: str, gateway: str) -> str:
-    """Rewrite 127.0.0.1/localhost to the Docker gateway IP."""
-    return base_url.replace("127.0.0.1", gateway).replace("localhost", gateway)
+def _docker_base_url(gateway: str, port: int) -> str:
+    """Build the OpenAI-compatible URL for Docker containers using the gateway IP."""
+    return f"http://{gateway}:{port}/v1"
 
 
 def _get_api_key(config: RunConfig) -> str:
@@ -57,7 +57,11 @@ def run_agent(config: RunConfig, backend: Backend, output_dir: Path) -> Path:
             "uvx not found in PATH. Install uv: https://docs.astral.sh/uv/"
         )
 
-    docker_url = _docker_base_url(backend.base_url, config.backend.docker_gateway)
+    if config.backend.type == "openai":
+        # Rewrite localhost in user-provided URL to docker gateway
+        docker_url = config.backend.openai.base_url.replace("127.0.0.1", config.backend.docker_gateway).replace("localhost", config.backend.docker_gateway)
+    else:
+        docker_url = _docker_base_url(config.backend.docker_gateway, config.backend.effective_port())
     model_string = f"openai/{backend.model_name}"
     dataset = _normalize_dataset(config.dataset)
     agent_cfg = config.agent

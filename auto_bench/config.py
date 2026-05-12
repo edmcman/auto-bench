@@ -96,11 +96,11 @@ class OpenAIConfig(BaseModel):
 
 class BackendConfig(BaseModel):
     type: Literal["llamacpp", "vllm", "openai"]
-    host: str = "172.17.0.1"
+    host: str = "172.17.0.1"  # address the server binds on (host-side)
     port: int | None = None  # defaults: llamacpp=8080, vllm=8000
     startup_timeout: int = 300  # seconds to wait for /health
-    # IP that Docker containers use to reach the host (172.17.0.1 on Linux,
-    # host.docker.internal on macOS/Docker Desktop)
+    # address containers use to reach the host (docker_gateway:port → server)
+    # 172.17.0.1 on Linux, host.docker.internal on macOS/Docker Desktop
     docker_gateway: str = "172.17.0.1"
 
     llamacpp: LlamaCppConfig = Field(default_factory=LlamaCppConfig)
@@ -235,10 +235,10 @@ class ExperimentConfig(BaseModel):
 
 class LocalConfig(BaseModel):
     """Machine-specific settings: how to run each backend."""
-    host: str = "172.17.0.1"
+    host: str = "172.17.0.1"  # address the server binds on (host-side)
     port: int | None = None
     startup_timeout: int = 300
-    docker_gateway: str = "172.17.0.1"
+    docker_gateway: str = "172.17.0.1"  # address containers use to reach the host
     hf_token: str | None = None
     llamacpp: LlamaCppConfig | None = None
     vllm: VllmConfig | None = None

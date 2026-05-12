@@ -84,15 +84,17 @@ This keeps experiment configs portable across machines while keeping machine-spe
 Create this file on each machine you run auto-bench on. All fields are optional.
 
 ```yaml
-# Network settings — where the backend server listens
-host: 127.0.0.1          # bind address (default: 172.17.0.1)
-port: 8080               # override port (default: 8080 for llamacpp, 8000 for vllm)
-startup_timeout: 300     # seconds to wait for backend /health endpoint
-
-# IP that Docker agent containers use to reach the host backend
+# Network settings
+# host: address the server binds on, from the host's perspective (default: 172.17.0.1)
+# docker_gateway: address containers use to reach the host (default: 172.17.0.1)
+# These are separate because you may bind on 127.0.0.1 locally but containers
+# need to reach the host via the Docker bridge IP.
 # Linux (Docker Engine): 172.17.0.1  (default)
 # macOS / Docker Desktop: host.docker.internal
+host: 127.0.0.1
 docker_gateway: "172.17.0.1"
+port: 8080               # override port (default: 8080 for llamacpp, 8000 for vllm)
+startup_timeout: 300     # seconds to wait for backend /health endpoint
 
 # HuggingFace token for gated models
 hf_token: hf_xxxxxxxxxxxxxxxxxxxx
