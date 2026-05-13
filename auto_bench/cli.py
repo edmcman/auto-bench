@@ -36,16 +36,22 @@ def _load_local(local_path: Path | None) -> LocalConfig:
     return LocalConfig()
 
 
-def _load_configs(config_path: Path, local_path: Path | None = None):
-    from .config import ExperimentConfig, merge_configs
+def _load_configs(config_path: Path, local_path: Path | None = None) -> list[RunConfig]:
+    from .config import ExperimentConfig, load_experiment_configs, merge_configs
 
-    experiment = _load_yaml(config_path, ExperimentConfig, "Experiment config error")
-    return merge_configs(experiment, _load_local(local_path))
+    try:
+        experiments = load_experiment_configs(config_path)
+    except ValueError as exc:
+        console.print(f"[red]Experiment config error:[/red] {exc}")
+        raise typer.Exit(1)
+
+    local = _load_local(local_path)
+    return [merge_configs(exp, local) for exp in experiments]
 
 
 @app.command()
 def run(
-    config: Path = typer.Argument(..., help="Path to experiment config YAML", exists=True),
+    config: Path = typer.Argument(..., help="Path to experiment config jsonnet", exists=True),
     local: Path = typer.Option(
         None, "--local", "-l",
         help="Path to local config (default: ~/.config/auto-bench/local.yaml)",
@@ -60,41 +66,42 @@ def run(
     resume: bool = typer.Option(False, "--resume", help="Resume the most recent sweep in the output directory"),
 ):
     """Run the full pipeline: download -> start server -> run agent -> evaluate."""
+    from .config import RunConfig
     from .runner import _find_latest_sweep_dir, run_pipeline
 
     if resume_from and resume:
         console.print("[red]--resume-from and --resume are mutually exclusive[/red]")
         raise typer.Exit(1)
 
-    cfg = _load_configs(config, local)
+    runs = _load_configs(config, local)
     if skip_eval:
-        cfg.evaluation.run_evaluation = False
+        for r in runs:
+            r.evaluation.run_evaluation = False
+
+    sweep_name = config.stem
 
     if resume:
-        resume_from = _find_latest_sweep_dir(Path(cfg.output_dir), cfg.name)
+        resume_from = _find_latest_sweep_dir(Path(runs[0].output_dir), sweep_name)
         if resume_from is None:
-            console.print(f"[red]No sweep directories found in {cfg.output_dir}[/red]")
+            console.print(f"[red]No sweep directories found in {runs[0].output_dir}[/red]")
             raise typer.Exit(1)
         console.print(f"[dim]Resuming latest sweep: {resume_from}[/dim]")
 
-    run_pipeline(cfg, resume_from=resume_from)
+    run_pipeline(runs, sweep_name=sweep_name, resume_from=resume_from)
 
 
 @app.command()
 def download(
-    config: Path = typer.Argument(..., help="Path to experiment config YAML", exists=True),
+    config: Path = typer.Argument(..., help="Path to experiment config jsonnet", exists=True),
     local: Path = typer.Option(
         None, "--local", "-l",
         help="Path to local config (default: ~/.config/auto-bench/local.yaml)",
     ),
 ):
     """Download model(s) defined in the config without running any inference."""
-    from .config import expand_sweep
     from .runner import make_backend
 
-    cfg = _load_configs(config, local)
-    runs = expand_sweep(cfg)
-
+    runs = _load_configs(config, local)
     for run_cfg in runs:
         backend = make_backend(run_cfg)
         console.print(f"\n[cyan]Downloading model for:[/cyan] {run_cfg.name}")
@@ -104,25 +111,24 @@ def download(
 
 @app.command()
 def validate(
-    config: Path = typer.Argument(..., help="Path to experiment config YAML", exists=True),
+    config: Path = typer.Argument(..., help="Path to experiment config jsonnet", exists=True),
     local: Path = typer.Option(
         None, "--local", "-l",
         help="Path to local config (default: ~/.config/auto-bench/local.yaml)",
     ),
 ):
-    """Validate a YAML config file without running anything."""
-    from .config import expand_sweep
-
-    cfg = _load_configs(config, local)
-    runs = expand_sweep(cfg)
-    console.print(f"[green]Config valid.[/green] {'Sweep: ' + str(len(runs)) + ' runs' if len(runs) > 1 else 'Single run: ' + cfg.name}")
+    """Validate a config file without running anything."""
+    runs = _load_configs(config, local)
+    n = len(runs)
+    label = f"Sweep: {n} runs" if n > 1 else f"Single run: {runs[0].name}"
+    console.print(f"[green]Config valid.[/green] {label}")
     for r in runs:
         console.print(f"  * {r.name}  backend={r.backend.type}  model={r.model.effective_name()}")
 
 
 @app.command()
 def serve(
-    config: Path = typer.Argument(..., help="Path to experiment config YAML", exists=True),
+    config: Path = typer.Argument(..., help="Path to experiment config jsonnet", exists=True),
     local: Path = typer.Option(
         None, "--local", "-l",
         help="Path to local config (default: ~/.config/auto-bench/local.yaml)",
@@ -130,11 +136,9 @@ def serve(
     dry_run: bool = typer.Option(False, "--dry-run", "-n", help="Print the backend command and exit without running it"),
 ):
     """Download model and start the backend server. Runs until Ctrl+C."""
-    from .config import expand_sweep
     from .runner import serve_model
 
-    cfg = _load_configs(config, local)
-    runs = expand_sweep(cfg)
+    runs = _load_configs(config, local)
 
     if len(runs) > 1:
         console.print(

@@ -15,7 +15,7 @@ from .backends.base import Backend
 from .backends.llamacpp import LlamaCppBackend
 from .backends.openai_backend import OpenAIBackend
 from .backends.vllm import VllmBackend
-from .config import RunConfig, expand_sweep
+from .config import RunConfig
 from .downloader import is_gguf_cached, is_snapshot_cached, remove_from_cache
 from .evaluator import collect_harbor_results, parse_results
 
@@ -279,15 +279,14 @@ def run_single(
     }
 
 
-def run_pipeline(config: RunConfig, *, resume_from: Path | None = None) -> list[dict]:
-    runs = expand_sweep(config)
+def run_pipeline(runs: list[RunConfig], *, sweep_name: str | None = None, resume_from: Path | None = None) -> list[dict]:
     all_results: list[dict] = []
     is_sweep = len(runs) > 1
 
     if resume_from is not None:
         if not is_sweep:
             console.print("[yellow]--resume-from given but config is not a sweep; running as fresh.[/yellow]")
-            sweep_dir = Path(config.output_dir)
+            sweep_dir = Path(runs[0].output_dir)
         else:
             sweep_dir = resume_from
             completed = _find_completed_entries(sweep_dir)
@@ -299,10 +298,11 @@ def run_pipeline(config: RunConfig, *, resume_from: Path | None = None) -> list[
         runs_to_do = [r for r in runs if r.name not in {rr["name"] for rr in all_results}]
     else:
         if is_sweep:
+            name = sweep_name or runs[0].name
             sweep_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            sweep_dir = Path(config.output_dir) / f"sweep_{config.name}_{sweep_timestamp}"
+            sweep_dir = Path(runs[0].output_dir) / f"sweep_{name}_{sweep_timestamp}"
         else:
-            sweep_dir = Path(config.output_dir)
+            sweep_dir = Path(runs[0].output_dir)
         sweep_dir.mkdir(parents=True, exist_ok=True)
         runs_to_do = runs
 
@@ -311,7 +311,7 @@ def run_pipeline(config: RunConfig, *, resume_from: Path | None = None) -> list[
 
     # Logits file for KL divergence (llamacpp sweep only)
     ref_logits: Path | None = None
-    if is_sweep and config.backend.type == "llamacpp" and config.evaluation.kl_divergence.enabled:
+    if is_sweep and runs[0].backend.type == "llamacpp" and runs[0].evaluation.kl_divergence.enabled:
         ref_logits = sweep_dir / "reference_logits.bin"
 
     total = len(runs_to_do) + len(all_results)

@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **auto-bench** orchestrates fully-automated SWE-bench runs against locally-hosted LLMs. The pipeline is:
 
 ```
-YAML config → download model → start backend server → run Harbor agent → collect results
+jsonnet config → download model → start backend server → run Harbor agent → collect results
 ```
 
 It shells out to two external tools: `llama-server` or `vllm serve` (inference) and `uvx harbor run` (agent + evaluation). `uv` must be installed separately for `uvx` to work.
@@ -15,14 +15,14 @@ It shells out to two external tools: `llama-server` or `vllm serve` (inference) 
 ## Setup & Commands
 
 ```bash
-uv sync                                                # install dependencies
-uv run auto-bench validate configs/smoke-test.yaml # validate config
-uv run auto-bench download configs/smoke-test.yaml # download model only
-uv run auto-bench run configs/smoke-test.yaml      # full pipeline
-uv run auto-bench serve configs/smoke-test.yaml    # download + start server, block until Ctrl+C
+uv sync                                                     # install dependencies
+uv run auto-bench validate configs/smoke-test.jsonnet    # validate config
+uv run auto-bench download configs/smoke-test.jsonnet    # download model only
+uv run auto-bench run configs/smoke-test.jsonnet          # full pipeline
+uv run auto-bench serve configs/smoke-test.jsonnet        # download + start server, block until Ctrl+C
 ```
 
-There is no test suite. `configs/smoke-test.yaml` (1 instance) is the standard quick check.
+There is no test suite. `configs/smoke-test.jsonnet` (1 instance) is the standard quick check.
 
 All commands accept `--local` / `-l` to specify a local config file (default: `~/.config/auto-bench/local.yaml`). `run` also accepts `--skip-eval` and `--skip-download`. `serve` accepts `--dry-run` / `-n` to print the backend command without starting it.
 
@@ -30,7 +30,7 @@ All commands accept `--local` / `-l` to specify a local config file (default: `~
 
 ### Two-Tier Config System (`config.py`)
 
-Experiment YAML files use `ExperimentConfig` (portable: what to run). Machine-specific settings live in `LocalConfig` (how to run: host, ports, HF token, backend-specific overrides). `merge_configs()` combines them into a unified `RunConfig`.
+Experiment jsonnet files use `ExperimentConfig` (portable: what to run). Machine-specific settings live in `LocalConfig` (how to run: host, ports, HF token, backend-specific overrides). `merge_configs()` combines them into a unified `RunConfig`.
 
 ```python
 ExperimentConfig  # name, dataset, split, instance_ids, output_dir, backend_type,
@@ -42,7 +42,9 @@ LocalConfig       # host, port, startup_timeout, docker_gateway, hf_token,
 RunConfig         # merged: model, backend, backend_options, sampling, agent, evaluation
 ```
 
-`expand_sweep()` transforms a config with a `model.sweep` list into multiple `RunConfig` objects — one per sweep entry — enabling automated comparisons. Sweep run outputs are collected under `sweep_{name}_{timestamp}/`.
+jsonnet configs produce either a single object (one run) or a list of objects (sweep). `load_experiment_configs()` evaluates the jsonnet file, validates each object as `ExperimentConfig`, and returns a list. Each is then merged with `LocalConfig` to produce `list[RunConfig]`.
+
+Sweeps are defined natively in jsonnet using `std.map` and `import`, eliminating the need for a separate Python-side sweep expansion step. Shared data (e.g., quant lists) can be extracted into `configs/lib/*.libsonnet` files.
 
 ### Backend Abstraction (`backends/`)
 
@@ -57,7 +59,7 @@ Backend (ABC)
 
 ### Key Config Fields
 
-**ModelConfig** — `source` (huggingface/local), `repo_id`, `filename` (GGUF only), `revision`, `local_path`, `allow_patterns`/`ignore_patterns` (vLLM only), `sweep` (list of `SweepEntry`)
+**ModelConfig** — `source` (huggingface/local), `repo_id`, `filename` (GGUF only), `revision`, `local_path`, `allow_patterns`/`ignore_patterns` (vLLM only)
 
 **BackendConfig** — `type` (llamacpp/vllm/openai), `host`, `port`, `startup_timeout`, `docker_gateway`
 - `LlamaCppConfig`: `cmd_template`, `perplexity_cmd_template`, `n_gpu_layers` (int or "auto"/"all"), `parallel`, `extra_args`
@@ -69,8 +71,6 @@ Backend (ABC)
 **SamplingConfig** — `temperature`, `top_p`, `top_k`, `min_p`, `max_tokens`, `extra` (forwarded to OpenAI client `extra_body`)
 
 **AgentConfig** — `agent`, `env`, `attempts`, `limit`, `trials`, `setup_multiplier`, `agent_kwargs`, `agent_env`, `extra_args`
-
-**SweepEntry** — `label`, `filename`, `sampling`, `overrides` (arbitrary nested dict deep-merged into the run config)
 
 ### Agent Invocation (`agent.py`)
 
@@ -93,8 +93,8 @@ Evaluation happens inline during `run`, not as a separate CLI command. `collect_
 
 ## Key Design Points
 
-- **Two-tier config**: Experiment YAML describes what to run; `~/.config/auto-bench/local.yaml` describes how to run it (host, ports, tokens). This keeps experiment configs portable.
-- **Sweep mode**: A single YAML with `model.sweep` produces a comparison table and `summary.md`. Each sweep entry can set `filename`, `sampling`, and arbitrary `overrides` for deep-merging into the run config (e.g. `backend_options.ctx_size`).
+- **Two-tier config**: Experiment jsonnet describes what to run; `~/.config/auto-bench/local.yaml` describes how to run it (host, ports, tokens). This keeps experiment configs portable.
+- **Sweep mode in jsonnet**: A jsonnet file outputs a list of config objects to define a sweep. Shared data (e.g., quant lists) can be extracted into `configs/lib/*.libsonnet` and imported. The sweep directory is named after the config file stem (e.g., `sweep_qwen-2b-quant-sweep_20250512_120000`).
 - **OpenAI backend as base class**: `type: openai` skips download/start/stop entirely and points at an already-running server. `LlamaCppBackend` and `VllmBackend` inherit from it for shared properties like `model_name` and `base_url`.
 - **Docker gateway vs host**: `host` is the address the server binds on (host-side). `docker_gateway` is the address containers use to reach the host. They default to the same value (`172.17.0.1` on Linux, `host.docker.internal` on macOS/Docker Desktop) but differ when, e.g., the server binds on `127.0.0.1` while containers still need the bridge IP.
 - **OpenHands --ak defaults**: `version="0.57.0"` and `python_version="3.12"` are automatically prepended to `--ak` for OpenHands as a workaround for a Harbor bug, unless already specified in `agent_kwargs`.

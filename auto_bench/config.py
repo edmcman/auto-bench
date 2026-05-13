@@ -1,24 +1,16 @@
-"""Pydantic config schema for auto-bench YAML configs."""
+"""Pydantic config schema for auto-bench configs."""
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any, Literal
 
-import yaml
 from pydantic import BaseModel, Field, model_validator
 
 
 # ---------------------------------------------------------------------------
 # Model config
 # ---------------------------------------------------------------------------
-
-class SweepEntry(BaseModel):
-    """One entry in a quantization / parameter sweep."""
-    label: str
-    filename: str | None = None
-    sampling: SamplingConfig | None = None
-    overrides: dict[str, Any] = Field(default_factory=dict)
-
 
 class ModelConfig(BaseModel):
     """Model source and identity config."""
@@ -27,18 +19,16 @@ class ModelConfig(BaseModel):
     # HuggingFace source (default)
     source: Literal["huggingface", "local"] = "huggingface"
     repo_id: str | None = None
-    # For llama.cpp: specific GGUF filename (required unless using sweep)
+    # For llama.cpp: specific GGUF filename
     filename: str | None = None
     revision: str = "main"
     # For local source: path to model file or directory
     local_path: str | None = None
-    # Injected from local config; not written in experiment YAML
+    # Injected from local config; not written in experiment jsonnet
     hf_token: str | None = None
     # vLLM: filter which files to download
     allow_patterns: list[str] | None = None
     ignore_patterns: list[str] | None = None
-    # Quantization sweep — if set, runner creates one sub-run per entry
-    sweep: list[SweepEntry] | None = None
 
     @model_validator(mode="after")
     def _validate(self) -> ModelConfig:
@@ -266,48 +256,37 @@ def merge_configs(experiment: ExperimentConfig, local: LocalConfig) -> RunConfig
     return RunConfig.model_validate(data)
 
 
-def load_config(path: str | Path) -> RunConfig:
-    """Load and validate a YAML config file."""
-    with open(path) as f:
-        data = yaml.safe_load(f)
-    return RunConfig.model_validate(data)
+def load_experiment_configs(path: Path) -> list[ExperimentConfig]:
+    """Evaluate a jsonnet config file and return validated ExperimentConfigs.
 
-
-def deep_merge(base: dict, overrides: dict) -> None:
-    """Recursively merge *overrides* into *base* (mutates base)."""
-    for key, value in overrides.items():
-        if key in base and isinstance(base[key], dict) and isinstance(value, dict):
-            deep_merge(base[key], value)
-        else:
-            base[key] = value
-
-
-def expand_sweep(config: RunConfig) -> list[RunConfig]:
+    The jsonnet file may output either a single object (one run) or a list
+    of objects (sweep). Each object is validated as an ExperimentConfig.
     """
-    If config.model.sweep is set, return one RunConfig per sweep entry
-    (each with model.filename and model.name resolved for that entry,
-    and any per-entry overrides applied).  Otherwise return [config].
-    """
-    if not config.model.sweep:
-        return [config]
+    import _jsonnet
 
-    runs: list[RunConfig] = []
-    for entry in config.model.sweep:
-        # Deep copy via re-validation
-        data = config.model_dump()
+    path = Path(path)
+    json_str = _jsonnet.evaluate_file(str(path))
+    data = json.loads(json_str)
 
-        # Apply sweep entry fields
-        data["name"] = f"{config.name}-{entry.label}"
-        data["model"]["filename"] = entry.filename or config.model.filename
-        # Remove sweep to avoid infinite recursion
-        data["model"]["sweep"] = None
+    if isinstance(data, dict):
+        entries = [data]
+    elif isinstance(data, list):
+        entries = data
+    else:
+        raise ValueError(
+            f"jsonnet file {path} must produce an object or list, "
+            f"got {type(data).__name__}"
+        )
 
-        if entry.sampling:
-            data["sampling"] = {**data["sampling"], **entry.sampling.model_dump(exclude_none=True)}
+    configs: list[ExperimentConfig] = []
+    errors: list[str] = []
+    for i, entry in enumerate(entries):
+        try:
+            configs.append(ExperimentConfig.model_validate(entry))
+        except Exception as exc:
+            errors.append(f"  Entry {i} in {path}: {exc}")
 
-        if entry.overrides:
-            deep_merge(data, entry.overrides)
+    if errors:
+        raise ValueError(f"Experiment config validation failed:\n" + "\n".join(errors))
 
-        runs.append(RunConfig.model_validate(data))
-
-    return runs
+    return configs
