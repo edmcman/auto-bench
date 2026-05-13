@@ -54,8 +54,8 @@ class VllmBackend(SubprocessBackend):
             inner_args += ["--quantization", cfg.quantization]
         if cfg.enforce_eager:
             inner_args.append("--enforce-eager")
-        if cfg.max_num_seqs:
-            inner_args += ["--max-num-seqs", str(cfg.max_num_seqs)]
+        if self.backend_options.parallel > 1:
+            inner_args += ["--max-num-seqs", str(self.backend_options.parallel)]
         if cfg.api_key:
             inner_args += ["--api-key", cfg.api_key]
         if cfg.chat_template:

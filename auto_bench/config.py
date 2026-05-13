@@ -54,7 +54,6 @@ class LlamaCppConfig(BaseModel):
     cmd_template: str = "llama-server --model {model} --host {host} --port {port} {args}"
     perplexity_cmd_template: str = "llama-perplexity --model {model} --file {file} {args}"
     n_gpu_layers: int | str = "auto"
-    parallel: int = 1
     auto_fit: bool = True
     extra_args: list[str] = Field(default_factory=list)
 
@@ -67,15 +66,15 @@ class VllmConfig(BaseModel):
     pipeline_parallel_size: int = 1
     quantization: str | None = None
     enforce_eager: bool = False
-    max_num_seqs: int | None = None
     api_key: str | None = None
     chat_template: str | None = None
     extra_args: list[str] = Field(default_factory=list)
 
 
 class BackendOptions(BaseModel):
-    """Experiment-level context-length settings."""
-    ctx_size: int | None = None      # llamacpp --ctx-size / vllm --max-model-len; None = defer to default
+    """Experiment-level backend settings."""
+    ctx_size: int | None = None      # per-slot context size; llamacpp passes parallel*ctx_size
+    parallel: int = 1                # parallel decoding slots / concurrent sequences
 
 
 class OpenAIConfig(BaseModel):
@@ -221,6 +220,9 @@ class ExperimentConfig(BaseModel):
     agent: AgentConfig = Field(default_factory=AgentConfig)
     evaluation: EvaluationConfig = Field(default_factory=EvaluationConfig)
     remove_downloaded_models: bool = False
+    # Backend-specific overrides (merged with LocalConfig; experiment wins)
+    llamacpp: LlamaCppConfig | None = None
+    vllm: VllmConfig | None = None
 
 
 class LocalConfig(BaseModel):
@@ -240,6 +242,11 @@ def merge_configs(experiment: ExperimentConfig, local: LocalConfig) -> RunConfig
     data = experiment.model_dump()
     llamacpp_data = local.llamacpp.model_dump() if local.llamacpp else {}
     vllm_data = local.vllm.model_dump() if local.vllm else {}
+    # Experiment backend overrides win over local defaults (only explicitly-set fields)
+    if experiment.llamacpp:
+        llamacpp_data.update(experiment.llamacpp.model_dump(exclude_unset=True))
+    if experiment.vllm:
+        vllm_data.update(experiment.vllm.model_dump(exclude_unset=True))
     data["backend_options"] = experiment.backend_options.model_dump()
     data["backend"] = {
         "type": experiment.backend_type,

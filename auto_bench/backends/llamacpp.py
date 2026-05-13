@@ -40,10 +40,12 @@ class LlamaCppBackend(SubprocessBackend):
         model_file = Path(model_path)
         port = self.backend.effective_port()
 
+        parallel = self.backend_options.parallel
+        ctx_size = (self.backend_options.ctx_size or 0) * parallel
         inner_args: list[str] = [
-            "--parallel", str(cfg.parallel),
+            "--parallel", str(parallel),
             "--alias", self.model_name,
-            "--ctx-size", str(self.backend_options.ctx_size or 0),
+            "--ctx-size", str(ctx_size),
         ]
         if self.sampling.max_tokens > 0:
             inner_args += ["--predict", str(self.sampling.max_tokens)]
