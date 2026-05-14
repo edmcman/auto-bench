@@ -58,6 +58,7 @@ def run(
     ),
     skip_download: bool = typer.Option(False, "--skip-download", help="Skip model download step"),
     skip_eval: bool = typer.Option(False, "--skip-eval", help="Skip evaluation harness after inference"),
+    parallel: int = typer.Option(None, "--parallel", "-p", help="Override parallelism (agent trials + backend slots)"),
     resume_from: Path = typer.Option(
         None, "--resume-from",
         help="Resume a partially-completed sweep from this directory",
@@ -77,6 +78,11 @@ def run(
     if skip_eval:
         for r in runs:
             r.evaluation.run_evaluation = False
+
+    if parallel is not None:
+        for r in runs:
+            r.agent.trials = parallel
+            r.backend_options.parallel = parallel
 
     sweep_name = config.stem
 

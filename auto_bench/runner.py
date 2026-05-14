@@ -211,7 +211,6 @@ def run_single(
             model_path=model_path,
             text=text,
             n_gpu_layers=config.backend.llamacpp.n_gpu_layers,
-            ctx_size=config.backend_options.ctx_size,
             logits_save=logits_save,
             logits_base=logits_base,
         )

@@ -2,6 +2,7 @@
 // Use: local d = import 'lib/qwen35.libsonnet'; d { name: "...", model: {...} }
 local defaults = import 'defaults.libsonnet';
 defaults + {
+  backend_options: { ctx_size: 262144 },
   sampling: {
     temperature: 0.7,
     top_p: 0.8,

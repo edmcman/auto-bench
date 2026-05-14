@@ -24,7 +24,6 @@ def run_llama_perplexity(
     model_path: str,
     text: str,
     n_gpu_layers: int | str,
-    ctx_size: int | None = None,
     logits_save: Path | None = None,
     logits_base: Path | None = None,
 ) -> tuple[float, float | None]:
@@ -37,8 +36,6 @@ def run_llama_perplexity(
 
     try:
         extra: list[str] = ["-ngl", str(ngl), "--no-mmap"]
-        if ctx_size:
-            extra += ["-c", str(ctx_size)]
         if logits_save:
             extra += ["--save-all-logits", str(logits_save)]
         if logits_base:
