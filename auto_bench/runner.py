@@ -316,7 +316,7 @@ def run_pipeline(runs: list[RunConfig], *, sweep_name: str | None = None, resume
     total = len(runs_to_do) + len(all_results)
     for i, run_config in enumerate(runs_to_do):
         if is_sweep:
-            done = len(all_results) + i
+            done = len(all_results)
             console.rule(f"[bold magenta]Sweep {done + 1}/{total}: {run_config.name}")
 
         actual_idx = len(all_results)
