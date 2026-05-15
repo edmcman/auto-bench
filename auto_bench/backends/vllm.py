@@ -40,9 +40,11 @@ class VllmBackend(SubprocessBackend):
         inner_args: list[str] = [
             "--dtype", cfg.dtype,
             "--gpu-memory-utilization", str(cfg.gpu_memory_utilization),
-            "--tensor-parallel-size", str(cfg.tensor_parallel_size),
-            "--pipeline-parallel-size", str(cfg.pipeline_parallel_size),
         ]
+        if cfg.tensor_parallel_size > 1:
+            inner_args += ["--tensor-parallel-size", str(cfg.tensor_parallel_size)]
+        if cfg.pipeline_parallel_size > 1:
+            inner_args += ["--pipeline-parallel-size", str(cfg.pipeline_parallel_size)]
         if self.backend_options.ctx_size:
             inner_args += ["--max-model-len", str(self.backend_options.ctx_size)]
         gen_override: dict[str, float | int] = dict(self.sampling.non_defaults())
@@ -60,6 +62,8 @@ class VllmBackend(SubprocessBackend):
             inner_args += ["--api-key", cfg.api_key]
         if cfg.chat_template:
             inner_args += ["--chat-template", cfg.chat_template]
+        if cfg.tool_call_parser:
+            inner_args += ["--enable-auto-tool-choice", "--tool-call-parser", cfg.tool_call_parser]
         inner_args.extend(cfg.extra_args)
 
         parts = shlex.split(cfg.cmd_template.format(

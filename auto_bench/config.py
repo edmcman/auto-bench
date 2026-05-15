@@ -68,6 +68,7 @@ class VllmConfig(BaseModel):
     enforce_eager: bool = False
     api_key: str | None = None
     chat_template: str | None = None
+    tool_call_parser: str | None = None
     extra_args: list[str] = Field(default_factory=list)
 
 

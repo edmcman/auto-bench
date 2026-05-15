@@ -24,4 +24,10 @@ std.map(
       model+: { filename: q.filename },
     },
   entries
-)
+) + [
+  base {
+    name+: "-vllm",
+    backend_type: "vllm",
+    model: { name: "Qwen3.5-2B", source: "huggingface", repo_id: "Qwen/Qwen3.5-2B" },
+  },
+]

@@ -14,7 +14,7 @@
 		"./features/llama-cpp": {},
 		"./features/docker-config": {},
 		"ghcr.io/devcontainers-extra/features/apt-packages:1": {
-			"packages": "tmux"
+			"packages": "tmux python3.12-dev ninja-build"
 		},
 		"ghcr.io/devcontainers/features/nvidia-cuda:3": {
           "installToolkit": true
@@ -45,7 +45,7 @@
 			"target": "/home/vscode/.cache"
 		}
 	],
-	"postCreateCommand": "mkdir -p /home/vscode/.config /home/vscode/.cache && sudo chown -R vscode:vscode /home/vscode/.config /home/vscode/.cache",
+	"postCreateCommand": "mkdir -p /home/vscode/.config /home/vscode/.cache && sudo chown -R vscode:vscode /home/vscode/.config /home/vscode/.cache && uv tool install --editable /workspaces/auto-bench && uv tool install vllm",
 	// This forwards to the local machine, which could be useful for debugging?
 	"forwardPorts": [8085],
 

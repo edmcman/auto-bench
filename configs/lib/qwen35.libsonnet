@@ -3,6 +3,7 @@
 local defaults = import 'defaults.libsonnet';
 defaults + {
   backend_options: { ctx_size: 262144 },
+  vllm: { tool_call_parser: "qwen3_coder" },
   sampling: {
     temperature: 0.7,
     top_p: 0.8,
