@@ -13,7 +13,7 @@ local base = d {
     repo_id: "unsloth/Qwen3.5-2B-GGUF",
     filename: "Qwen3.5-2B-UD-Q5_K_XL.gguf",
   },
-  agent+: { attempts: 8, limit: 1 },
+  agent+: { attempts: 8 },
   remove_downloaded_models: false,
 };
 
