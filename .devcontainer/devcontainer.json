@@ -14,7 +14,7 @@
 		"./features/llama-cpp": {},
 		"./features/docker-config": {},
 		"ghcr.io/devcontainers-extra/features/apt-packages:1": {
-			"packages": "tmux python3.12-dev ninja-build"
+			"packages": "tmux python3.12-dev ninja-build jsonnet"
 		},
 		"ghcr.io/devcontainers/features/nvidia-cuda:3": {
           "installToolkit": true
