@@ -351,10 +351,19 @@ def _fmt_runtime(seconds: float | None) -> str:
     return f"{m}m {s}s" if m else f"{s}s"
 
 
+_EXC_ABBREV = {
+    "AgentTimeoutError": "Timeout",
+    "NonZeroAgentExitCodeError": "ExitCode",
+    "VerifierTimeoutError": "Verifier",
+    "RewardFileNotFoundError": "Reward",
+    "AgentSetupTimeoutError": "Setup",
+}
+
+
 def _fmt_exceptions(results: dict) -> str:
     exc_stats = results.get("exception_stats", {})
     n_incomplete = results.get("n_incomplete", 0)
-    parts = [f"{t}({len(ids)})" for t, ids in sorted(exc_stats.items())]
+    parts = [f"{_EXC_ABBREV.get(t, t)}({len(ids)})" for t, ids in sorted(exc_stats.items())]
     if n_incomplete:
         parts.append(f"Incomplete({n_incomplete})")
     return ", ".join(parts)
@@ -368,21 +377,21 @@ def _write_sweep_summary_md(results: list[dict], sweep_dir: Path) -> None:
     """Write summary.md to *sweep_dir* from the current results list."""
     lines = [
         "# Sweep Summary\n",
-        "| Run | Resolved | Total | % Resolved | PPL | KL | Runtime | Version | Exceptions | Error |",
-        "|-----|----------|-------|------------|-----|----|---------|---------|------------|-------|",
+        "| Run | Resolved | % | PPL | KL | Runtime | Exceptions |",
+        "|-----|----------|---|-----|----|---------|-----------:|",
     ]
     for r in results:
         resolved, total, pct = parse_results(r.get("results", {}))
         runtime = _fmt_runtime(r.get("total_runtime"))
         exceptions = _fmt_exceptions(r.get("results", {}))
-        error = r.get("error", "")
         ppl = f"{r['perplexity']:.2f}" if r.get("perplexity") else "—"
         kl = _fmt_kl(r.get("kl_divergence"))
-        version = r.get("version") or "—"
         lines.append(
-            f"| {r['name']} | {resolved} | {total} | {pct:.1f}% | {ppl} | {kl} | {runtime} | {version} | {exceptions} | {error} |"
+            f"| {r['name']} | {resolved}/{total} | {pct:.1f}% | {ppl} | {kl} | {runtime} | {exceptions} |"
         )
-    (sweep_dir / "summary.md").write_text("\n".join(lines) + "\n")
+    body = "\n".join(lines)
+    content = f'<div style="text-align: center; overflow-x: auto;">\n\n{body}\n\n</div>\n'
+    (sweep_dir / "summary.md").write_text(content)
 
 
 def _write_sweep_csv(results: list[dict], sweep_dir: Path) -> None:
