@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import csv
 import json
+import shutil
+import tarfile
 import time
 from datetime import datetime
 from pathlib import Path
@@ -100,9 +102,12 @@ def _collect_previous_results(sweep_dir: Path) -> list[dict]:
             continue
         meta_file = child / "run_meta.json"
         meta = json.loads(meta_file.read_text()) if meta_file.exists() else {}
+        stored_results = meta.pop("results", None)
+        jobs_dir = child / "jobs"
+        eval_results = stored_results if stored_results is not None else collect_harbor_results(jobs_dir)
         results.append({
             "name": name,
-            "results": collect_harbor_results(child / "jobs"),
+            "results": eval_results,
             "output_dir": str(child),
             **meta,
         })
@@ -163,6 +168,16 @@ def serve_model(config: RunConfig, dry_run: bool = False) -> None:
         console.print("[green]Server stopped.[/green]")
         if config.remove_downloaded_models and not was_cached:
             remove_from_cache(model_path)
+
+
+def _compress_jobs(source_dir: Path, archive_path: Path) -> None:
+    """Create a .tar.zst archive of source_dir."""
+    import zstandard as zstd
+    cctx = zstd.ZstdCompressor()
+    with archive_path.open("wb") as f:
+        with cctx.stream_writer(f) as compressor:
+            with tarfile.open(fileobj=compressor, mode="w|") as tar:
+                tar.add(source_dir, arcname=source_dir.name)
 
 
 def run_single(
@@ -260,10 +275,21 @@ def run_single(
     elif not config.evaluation.run_evaluation:
         console.print(f"\n[yellow]Evaluation skipped.[/yellow] Jobs: {agent_output}")
 
+    # Compress or delete the jobs directory after evaluation
+    if config.jobs_cleanup in ("compress", "delete") and agent_output and agent_output.exists():
+        if config.jobs_cleanup == "compress":
+            archive = output_dir / "jobs.tar.zst"
+            _compress_jobs(agent_output, archive)
+            shutil.rmtree(agent_output)
+            console.print("[dim]Compressed jobs/ → jobs.tar.zst[/dim]")
+        else:
+            shutil.rmtree(agent_output)
+            console.print("[dim]Deleted jobs/[/dim]")
+
     total_runtime = time.monotonic() - t_start
     version = backend.get_version()
     (output_dir / "run_meta.json").write_text(
-        json.dumps({"perplexity": ppl, "kl_divergence": kl, "total_runtime": total_runtime, "version": version})
+        json.dumps({"perplexity": ppl, "kl_divergence": kl, "total_runtime": total_runtime, "version": version, "results": results})
     )
     return {
         "run_id": run_id,

@@ -65,6 +65,8 @@ def run(
         exists=True, file_okay=False, dir_okay=True,
     ),
     resume: bool = typer.Option(False, "--resume", help="Resume the most recent sweep in the output directory"),
+    keep_jobs: bool = typer.Option(False, "--keep-jobs", help="Keep the jobs/ directory after evaluation (default: compress to jobs.tar.zst)"),
+    delete_jobs: bool = typer.Option(False, "--delete-jobs", help="Delete jobs/ after evaluation instead of compressing"),
 ):
     """Run the full pipeline: download -> start server -> run agent -> evaluate."""
     from .config import RunConfig
@@ -74,10 +76,21 @@ def run(
         console.print("[red]--resume-from and --resume are mutually exclusive[/red]")
         raise typer.Exit(1)
 
+    if keep_jobs and delete_jobs:
+        console.print("[red]--keep-jobs and --delete-jobs are mutually exclusive[/red]")
+        raise typer.Exit(1)
+
     runs = _load_configs(config, local)
     if skip_eval:
         for r in runs:
             r.evaluation.run_evaluation = False
+
+    if keep_jobs:
+        for r in runs:
+            r.jobs_cleanup = "none"
+    elif delete_jobs:
+        for r in runs:
+            r.jobs_cleanup = "delete"
 
     if parallel is not None:
         for r in runs:

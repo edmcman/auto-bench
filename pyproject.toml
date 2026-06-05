@@ -21,6 +21,7 @@ dependencies = [
     # Harbor is invoked via `uvx harbor run` (uv must be installed separately)
     "matplotlib>=3.7",
     "vllm>=0.6",
+    "zstandard>=0.22",
 ]
 
 [project.scripts]
