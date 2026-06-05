@@ -1,5 +1,6 @@
 // Qwen3.5-35B-A3B quant sweep on all SWE-bench Verified instances
 local d = import 'lib/qwen35.libsonnet';
+local parallel = import 'lib/parallel.libsonnet';
 
 local llamacpp_quants = [
   { label: "BF16",   filenames: ["BF16/Qwen3.5-35B-A3B-BF16-00001-of-00002.gguf", "BF16/Qwen3.5-35B-A3B-BF16-00002-of-00002.gguf"] },
@@ -18,17 +19,17 @@ local base = d {
 };
 
 std.map(
-  function(q) base {
+  function(q) parallel.apply(base {
     name+: "-" + q.label,
     model+: if std.objectHas(q, 'filenames')
       then { filenames: q.filenames }
       else { filename: q.filename },
-  },
+  }, 10),
   llamacpp_quants
 ) + [
-  base {
+  parallel.apply(base {
     name+: "-vllm",
     backend_type: "vllm",
     model: { source: "huggingface", repo_id: "Qwen/Qwen3.5-35B-A3B" },
-  },
+  }, 10),
 ]
