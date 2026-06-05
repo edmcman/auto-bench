@@ -8,7 +8,7 @@ from pathlib import Path
 from rich.console import Console
 
 from ..config import BackendConfig, BackendOptions, ModelConfig, SamplingConfig
-from ..downloader import download_gguf
+from ..downloader import download_gguf, download_gguf_shards
 from .subprocess_backend import SubprocessBackend
 
 console = Console()
@@ -26,8 +26,15 @@ class LlamaCppBackend(SubprocessBackend):
         if (path := self._resolve_local_model()) is not None:
             return path
         assert self.model.repo_id, "model.repo_id is required for llamacpp backend"
+        if self.model.filenames:
+            return download_gguf_shards(
+                repo_id=self.model.repo_id,
+                filenames=self.model.filenames,
+                revision=self.model.revision,
+                token=self.model.hf_token,
+            )
         filename = self.model.filename
-        assert filename, "model.filename (GGUF filename) is required for llamacpp backend"
+        assert filename, "model.filename or model.filenames (GGUF filename(s)) is required for llamacpp backend"
         return download_gguf(
             repo_id=self.model.repo_id,
             filename=filename,
@@ -88,6 +95,8 @@ class LlamaCppBackend(SubprocessBackend):
     def model_name(self) -> str:
         if self.model.filename:
             return Path(self.model.filename).stem
+        if self.model.filenames:
+            return Path(self.model.filenames[0]).stem
         if self.model.name:
             return self.model.name
         return self.model.effective_name()

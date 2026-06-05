@@ -19,8 +19,9 @@ class ModelConfig(BaseModel):
     # HuggingFace source (default)
     source: Literal["huggingface", "local"] = "huggingface"
     repo_id: str | None = None
-    # For llama.cpp: specific GGUF filename
+    # For llama.cpp: specific GGUF filename (single file) or list of shards
     filename: str | None = None
+    filenames: list[str] | None = None
     revision: str = "main"
     # For local source: path to model file or directory
     local_path: str | None = None
@@ -201,6 +202,7 @@ class RunConfig(BaseModel):
     agent: AgentConfig = Field(default_factory=AgentConfig)
     evaluation: EvaluationConfig = Field(default_factory=EvaluationConfig)
     remove_downloaded_models: bool = False
+    jobs_cleanup: Literal["none", "compress", "delete"] = "compress"
 
 
 # ---------------------------------------------------------------------------
@@ -221,6 +223,7 @@ class ExperimentConfig(BaseModel):
     agent: AgentConfig = Field(default_factory=AgentConfig)
     evaluation: EvaluationConfig = Field(default_factory=EvaluationConfig)
     remove_downloaded_models: bool = False
+    jobs_cleanup: Literal["none", "compress", "delete"] = "compress"
     # Backend-specific overrides (merged with LocalConfig; experiment wins)
     llamacpp: LlamaCppConfig | None = None
     vllm: VllmConfig | None = None

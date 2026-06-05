@@ -72,6 +72,36 @@ def download_gguf(
     return path
 
 
+def download_gguf_shards(
+    repo_id: str,
+    filenames: list[str],
+    revision: str = "main",
+    token: str | None = None,
+) -> str:
+    """
+    Download multiple GGUF shards from HuggingFace Hub (split GGUFs).
+    Downloads all shards and returns the path of the first one.
+    llama.cpp auto-discovers the remaining shards from the same directory.
+    """
+    from huggingface_hub import hf_hub_download
+
+    console.print(f"[cyan]Downloading {len(filenames)} GGUF shards:[/cyan] {repo_id} (revision={revision})")
+    first_path: str | None = None
+    for filename in filenames:
+        console.print(f"[dim]  → {filename}[/dim]")
+        path = hf_hub_download(
+            repo_id=repo_id,
+            filename=filename,
+            revision=revision,
+            token=token,
+        )
+        if first_path is None:
+            first_path = path
+    assert first_path is not None
+    console.print(f"[green]Model ready:[/green] {first_path}")
+    return first_path
+
+
 def download_hf_snapshot(
     repo_id: str,
     revision: str = "main",

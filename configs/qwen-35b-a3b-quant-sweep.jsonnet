@@ -2,7 +2,7 @@
 local d = import 'lib/qwen35.libsonnet';
 
 local llamacpp_quants = [
-  { label: "BF16",   filename: "Qwen3.5-35B-A3B-BF16.gguf" },
+  { label: "BF16",   filenames: ["BF16/Qwen3.5-35B-A3B-BF16-00001-of-00002.gguf", "BF16/Qwen3.5-35B-A3B-BF16-00002-of-00002.gguf"] },
   { label: "Q8_0",   filename: "Qwen3.5-35B-A3B-Q8_0.gguf" },
   { label: "Q5_K_M", filename: "Qwen3.5-35B-A3B-Q5_K_M.gguf" },
 ];
@@ -12,7 +12,6 @@ local base = d {
   model: {
     source: "huggingface",
     repo_id: "unsloth/Qwen3.5-35B-A3B-GGUF",
-    filename: llamacpp_quants[0].filename,
   },
   sampling+: { max_tokens: 32768 },
   agent+: { attempts: 1 },
@@ -21,7 +20,9 @@ local base = d {
 std.map(
   function(q) base {
     name+: "-" + q.label,
-    model+: { filename: q.filename },
+    model+: if std.objectHas(q, 'filenames')
+      then { filenames: q.filenames }
+      else { filename: q.filename },
   },
   llamacpp_quants
 ) + [
