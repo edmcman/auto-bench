@@ -16,6 +16,7 @@ local base = d {
   },
   sampling+: { max_tokens: 32768 },
   agent+: { attempts: 1 },
+  remove_downloaded_models: true,
 };
 
 std.map(
