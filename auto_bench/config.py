@@ -63,7 +63,7 @@ class VllmConfig(BaseModel):
     cmd_template: str = "vllm serve {model} --host {host} --port {port} {args}"
     dtype: str = "auto"
     gpu_memory_utilization: float = 0.9
-    tensor_parallel_size: int = 1
+    tensor_parallel_size: int | Literal["auto"] = "auto"
     pipeline_parallel_size: int = 1
     quantization: str | None = None
     enforce_eager: bool = False

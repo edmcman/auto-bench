@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import json
+import os
 import shlex
 import shutil
+import subprocess
 from pathlib import Path
 
 from rich.console import Console
@@ -13,6 +15,24 @@ from ..downloader import download_hf_snapshot
 from .subprocess_backend import SubprocessBackend
 
 console = Console()
+
+
+def _count_visible_gpus() -> int:
+    """Return the number of GPUs available to this process."""
+    cuda_visible = os.environ.get("CUDA_VISIBLE_DEVICES")
+    if cuda_visible is not None and cuda_visible not in ("", "NoDeviceFiles"):
+        return len(cuda_visible.split(","))
+    try:
+        result = subprocess.run(
+            ["nvidia-smi", "--query-gpu=index", "--format=csv,noheader"],
+            capture_output=True, text=True, timeout=10,
+        )
+        if result.returncode == 0:
+            count = len(result.stdout.strip().splitlines())
+            return count if count > 0 else 1
+    except Exception:
+        pass
+    return 1
 
 
 class VllmBackend(SubprocessBackend):
@@ -41,8 +61,9 @@ class VllmBackend(SubprocessBackend):
             "--dtype", cfg.dtype,
             "--gpu-memory-utilization", str(cfg.gpu_memory_utilization),
         ]
-        if cfg.tensor_parallel_size > 1:
-            inner_args += ["--tensor-parallel-size", str(cfg.tensor_parallel_size)]
+        tp_size = _count_visible_gpus() if cfg.tensor_parallel_size == "auto" else cfg.tensor_parallel_size
+        if tp_size > 1:
+            inner_args += ["--tensor-parallel-size", str(tp_size)]
         if cfg.pipeline_parallel_size > 1:
             inner_args += ["--pipeline-parallel-size", str(cfg.pipeline_parallel_size)]
         if self.backend_options.ctx_size:
