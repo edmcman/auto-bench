@@ -31,9 +31,14 @@
 		"CUDA_VISIBLE_DEVICES": "6,7"
 	},
 
-	"runArgs": ["--gpus", "all", "-p", "8085:8085"],
+	"runArgs": ["--ipc=host", "--gpus", "all", "-p", "8085:8085"],
 
 	"mounts": [
+		{
+			"type": "bind",
+			"source": "/dev/shm",
+			"target": "/dev/shm"
+		},
 		{
 			"type": "volume",
 			"source": "auto-bench-config",

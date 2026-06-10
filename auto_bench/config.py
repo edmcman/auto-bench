@@ -233,7 +233,7 @@ class LocalConfig(BaseModel):
     """Machine-specific settings: how to run each backend."""
     host: str = "172.17.0.1"  # address the server binds on (host-side)
     port: int | None = None
-    startup_timeout: int = 300
+    startup_timeout: int = 900
     docker_gateway: str = "172.17.0.1"  # address containers use to reach the host
     hf_token: str | None = None
     llamacpp: LlamaCppConfig | None = None

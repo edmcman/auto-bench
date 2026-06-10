@@ -32,5 +32,7 @@ std.map(
     name+: "-vllm",
     backend_type: "vllm",
     model: { source: "huggingface", repo_id: "Qwen/Qwen3.5-35B-A3B" },
+    // Work around annoying vllm bug #45198
+    vllm+: { extra_args: ["--disable-custom-all-reduce"] },
   }, 10),
 ]
