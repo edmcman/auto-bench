@@ -67,6 +67,7 @@ class VllmConfig(BaseModel):
     pipeline_parallel_size: int = 1
     quantization: str | None = None
     enforce_eager: bool = False
+    enable_prefix_caching: bool = True
     api_key: str | None = None
     chat_template: str | None = None
     tool_call_parser: str | None = None

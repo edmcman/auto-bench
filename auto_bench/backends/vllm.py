@@ -77,6 +77,8 @@ class VllmBackend(SubprocessBackend):
             inner_args += ["--quantization", cfg.quantization]
         if cfg.enforce_eager:
             inner_args.append("--enforce-eager")
+        if cfg.enable_prefix_caching:
+            inner_args.append("--enable-prefix-caching")
         if self.backend_options.parallel > 1:
             inner_args += ["--max-num-seqs", str(self.backend_options.parallel)]
         if cfg.api_key:
