@@ -57,6 +57,8 @@ def _is_model_cached(config: RunConfig) -> bool:
     if model.source == "local":
         return True  # local models are never removed
     if config.backend.type == "llamacpp":
+        if model.filenames:
+            return all(is_gguf_cached(model.repo_id, f, model.revision) for f in model.filenames)
         return is_gguf_cached(model.repo_id, model.filename, model.revision)
     elif config.backend.type == "vllm":
         return is_snapshot_cached(model.repo_id, model.revision)
