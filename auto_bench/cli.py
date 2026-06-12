@@ -36,6 +36,34 @@ def _load_local(local_path: Path | None) -> LocalConfig:
     return LocalConfig()
 
 
+def _print_sweep_entries(runs: list[RunConfig]) -> None:
+    console.print("[yellow]Sweep config detected. Use --entry to select one:[/yellow]")
+    for i, r in enumerate(runs):
+        console.print(f"  [{i}] {r.name}")
+
+
+def _select_entry(runs: list[RunConfig], entry: str) -> RunConfig:
+    try:
+        idx = int(entry)
+        if 0 <= idx < len(runs):
+            return runs[idx]
+        console.print(f"[red]--entry index {idx} out of range (0–{len(runs) - 1})[/red]")
+        raise typer.Exit(1)
+    except ValueError:
+        pass
+    matches = [r for r in runs if r.name == entry]
+    if not matches:
+        matches = [r for r in runs if entry in r.name]
+    if len(matches) == 1:
+        return matches[0]
+    if not matches:
+        console.print(f"[red]--entry '{entry}' matched no sweep entries[/red]")
+    else:
+        names = ", ".join(r.name for r in matches)
+        console.print(f"[red]--entry '{entry}' matched multiple entries: {names}[/red]")
+    raise typer.Exit(1)
+
+
 def _load_configs(config_path: Path, local_path: Path | None = None) -> list[RunConfig]:
     from .config import ExperimentConfig, load_experiment_configs, merge_configs
 
@@ -116,11 +144,19 @@ def download(
         None, "--local", "-l",
         help="Path to local config (default: ~/.config/auto-bench/local.yaml)",
     ),
+    entry: str = typer.Option(None, "--entry", "-e", help="Sweep entry to download: 0-based index or name substring"),
 ):
     """Download model(s) defined in the config without running any inference."""
     from .runner import make_backend
 
     runs = _load_configs(config, local)
+
+    if len(runs) > 1:
+        if entry is None:
+            _print_sweep_entries(runs)
+            raise typer.Exit(1)
+        runs = [_select_entry(runs, entry)]
+
     for run_cfg in runs:
         backend = make_backend(run_cfg)
         console.print(f"\n[cyan]Downloading model for:[/cyan] {run_cfg.name}")
@@ -153,6 +189,7 @@ def serve(
         help="Path to local config (default: ~/.config/auto-bench/local.yaml)",
     ),
     dry_run: bool = typer.Option(False, "--dry-run", "-n", help="Print the backend command and exit without running it"),
+    entry: str = typer.Option(None, "--entry", "-e", help="Sweep entry to serve: 0-based index or name substring"),
 ):
     """Download model and start the backend server. Runs until Ctrl+C."""
     from .runner import serve_model
@@ -160,12 +197,14 @@ def serve(
     runs = _load_configs(config, local)
 
     if len(runs) > 1:
-        console.print(
-            f"[yellow]Sweep config with {len(runs)} entries detected. "
-            f"Serving only the first: [bold]{runs[0].name}[/bold][/yellow]"
-        )
+        if entry is None:
+            _print_sweep_entries(runs)
+            raise typer.Exit(1)
+        run_cfg = _select_entry(runs, entry)
+    else:
+        run_cfg = runs[0]
 
-    serve_model(runs[0], dry_run=dry_run)
+    serve_model(run_cfg, dry_run=dry_run)
 
 
 def main():
