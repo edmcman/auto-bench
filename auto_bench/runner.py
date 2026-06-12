@@ -415,8 +415,9 @@ def _write_sweep_summary_md(results: list[dict], sweep_dir: Path) -> None:
         lines.append(
             f"| {r['name']} | {resolved}/{total} | {pct:.1f}% | {ppl} | {kl} | {runtime} | {exceptions} |"
         )
-    body = "\n".join(lines)
-    content = f'<div style="text-align: center; overflow-x: auto;">\n\n{body}\n\n</div>\n'
+    header = lines[0]
+    table = "\n".join(lines[1:])
+    content = f'{header}\n<div style="text-align: center; overflow-x: auto;">\n\n{table}\n\n</div>\n'
     (sweep_dir / "summary.md").write_text(content)
 
 
