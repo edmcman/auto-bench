@@ -399,6 +399,24 @@ def _fmt_kl(kl: float | None) -> str:
     return f"{kl:.4f}" if kl is not None else "—"
 
 
+def _strip_common_prefix(names: list[str]) -> list[str]:
+    """Strip the longest common prefix (trimmed to a separator boundary) from all names."""
+    if len(names) <= 1:
+        return names
+    import os
+    prefix = os.path.commonprefix(names)
+    if prefix and prefix[-1] not in ("-", "_"):
+        for i in range(len(prefix) - 1, -1, -1):
+            if prefix[i] in ("-", "_"):
+                prefix = prefix[:i + 1]
+                break
+        else:
+            prefix = ""
+    if not prefix:
+        return names
+    return [n[len(prefix):] for n in names]
+
+
 def _write_sweep_summary_md(results: list[dict], sweep_dir: Path) -> None:
     """Write summary.md to *sweep_dir* from the current results list."""
     lines = [
@@ -406,14 +424,15 @@ def _write_sweep_summary_md(results: list[dict], sweep_dir: Path) -> None:
         "| Run | Resolved | % | PPL | KL | Runtime | Exceptions |",
         "|-----|----------|---|-----|----|---------|-----------:|",
     ]
-    for r in results:
+    short_names = _strip_common_prefix([r["name"] for r in results])
+    for r, short_name in zip(results, short_names):
         resolved, total, pct = parse_results(r.get("results", {}))
         runtime = _fmt_runtime(r.get("total_runtime"))
         exceptions = _fmt_exceptions(r.get("results", {}))
         ppl = f"{r['perplexity']:.2f}" if r.get("perplexity") else "—"
         kl = _fmt_kl(r.get("kl_divergence"))
         lines.append(
-            f"| {r['name']} | {resolved}/{total} | {pct:.1f}% | {ppl} | {kl} | {runtime} | {exceptions} |"
+            f"| {short_name} | {resolved}/{total} | {pct:.1f}% | {ppl} | {kl} | {runtime} | {exceptions} |"
         )
     header = lines[0]
     table = "\n".join(lines[1:])
@@ -458,9 +477,10 @@ def _print_sweep_summary(results: list[dict]) -> None:
     table.add_column("Runtime", justify="right")
     table.add_column("Error", style="red")
 
-    for r in results:
+    short_names = _strip_common_prefix([r["name"] for r in results])
+    for r, short_name in zip(results, short_names):
         resolved, total, pct = parse_results(r.get("results", {}))
-        name = r["name"]
+        name = short_name
         error = r.get("error", "")
         ppl = f"{r['perplexity']:.2f}" if r.get("perplexity") else "—"
         kl = _fmt_kl(r.get("kl_divergence"))
