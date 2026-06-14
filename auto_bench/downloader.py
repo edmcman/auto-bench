@@ -23,7 +23,9 @@ def is_snapshot_cached(repo_id: str, revision: str = "main") -> bool:
     cache = scan_cache_dir()
     for repo in cache.repos:
         if repo.repo_id == repo_id and repo.repo_type == "model":
-            return True
+            for cached_revision in repo.revisions:
+                if cached_revision.commit_hash == revision or revision in cached_revision.refs:
+                    return True
     return False
 
 
