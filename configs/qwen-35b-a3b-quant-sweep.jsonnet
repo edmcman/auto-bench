@@ -16,7 +16,7 @@ local base = d {
     repo_id: "unsloth/Qwen3.5-35B-A3B-GGUF",
   },
   sampling+: { max_tokens: 32768 },
-  agent+: { attempts: 1 },
+  agent+: { attempts: 1, agent_timeout_multiplier: 2 },
   remove_downloaded_models: true,
 };
 

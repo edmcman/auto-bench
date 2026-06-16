@@ -75,6 +75,7 @@ def run_agent(config: RunConfig, backend: Backend, output_dir: Path) -> Path:
         "-k", str(agent_cfg.attempts),
         "-n", str(agent_cfg.trials),
         "--agent-setup-timeout-multiplier", str(agent_cfg.setup_multiplier),
+        "--agent-timeout-multiplier", str(agent_cfg.agent_timeout_multiplier),
         "--max-retries", str(agent_cfg.max_retries),
     ]
 

@@ -170,6 +170,7 @@ agent:
   limit: null                            # -l (max instances from dataset; null = all)
   trials: 1                              # -n (concurrent trials)
   setup_multiplier: 10.0                 # --agent-setup-timeout-multiplier
+  agent_timeout_multiplier: 1.0          # --agent-timeout-multiplier
   max_retries: 0                         # -r (max retry attempts per trial)
   agent_kwargs: []                       # --ak key="value" entries
                                          # openhands version/python_version auto-injected

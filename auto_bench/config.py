@@ -154,6 +154,7 @@ class AgentConfig(BaseModel):
     limit: int | None = None          # -l (max instances from dataset; None = all)
     trials: int = 1                   # -n (concurrent trials)
     setup_multiplier: float = 10.0    # --agent-setup-timeout-multiplier
+    agent_timeout_multiplier: float = 1.0  # --agent-timeout-multiplier
     max_retries: int = 0              # -r (max retry attempts per trial)
     # --ak key="value" entries (openhands version/python_version auto-injected)
     agent_kwargs: list[str] = Field(default_factory=list)
