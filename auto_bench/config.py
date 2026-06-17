@@ -169,7 +169,7 @@ class AgentConfig(BaseModel):
 
 class PerplexityConfig(BaseModel):
     enabled: bool = True
-    dataset: str = "wikitext"
+    dataset: str = "Salesforce/wikitext"
     dataset_name: str = "wikitext-2-raw-v1"
     split: str = "test"
     max_chars: int = 40_000
