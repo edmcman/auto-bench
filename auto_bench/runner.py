@@ -182,6 +182,14 @@ def _compress_jobs(source_dir: Path, archive_path: Path) -> None:
                 tar.add(source_dir, arcname=source_dir.name)
 
 
+def _fix_docker_permissions(path: Path) -> None:
+    """chmod root-owned files written by Harbor containers so the host user can delete them."""
+    subprocess.run(
+        ["docker", "run", "--rm", "-v", f"{path}:/target", "alpine", "chmod", "-R", "777", "/target"],
+        check=False,
+    )
+
+
 def run_single(
     config: RunConfig,
     logits_save: Path | None = None,
@@ -279,13 +287,26 @@ def run_single(
 
     # Compress or delete the jobs directory after evaluation
     if config.jobs_cleanup in ("compress", "delete") and agent_output and agent_output.exists():
+        _fix_docker_permissions(agent_output)
         if config.jobs_cleanup == "compress":
             archive = output_dir / "jobs.tar.zst"
             _compress_jobs(agent_output, archive)
-            shutil.rmtree(agent_output)
+            try:
+                shutil.rmtree(agent_output)
+            except PermissionError as e:
+                console.print(
+                    f"[yellow]Warning: could not remove jobs/ after compression "
+                    f"(root-owned files from Docker containers): {e}[/yellow]"
+                )
             console.print("[dim]Compressed jobs/ → jobs.tar.zst[/dim]")
         else:
-            shutil.rmtree(agent_output)
+            try:
+                shutil.rmtree(agent_output)
+            except PermissionError as e:
+                console.print(
+                    f"[yellow]Warning: could not delete jobs/ "
+                    f"(root-owned files from Docker containers): {e}[/yellow]"
+                )
             console.print("[dim]Deleted jobs/[/dim]")
 
     total_runtime = time.monotonic() - t_start
