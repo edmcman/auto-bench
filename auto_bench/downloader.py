@@ -47,8 +47,28 @@ def remove_from_cache(model_path: str) -> None:
         console.print(f"[cyan]Removing downloaded model:[/cyan] {model_path}")
         strategy.execute()
         console.print(f"[green]Freed {strategy.expected_freed_size_str}[/green]")
+        _prune_detached_revisions()
     except Exception as exc:
         console.print(f"[yellow]Failed to remove cached model {model_path}: {exc}[/yellow]")
+
+
+def _prune_detached_revisions() -> None:
+    """Prune detached revisions from cache (equivalent to `hf cache prune`)."""
+    from huggingface_hub import scan_cache_dir
+
+    cache = scan_cache_dir()
+    detached = {
+        revision.commit_hash
+        for repo in cache.repos
+        for revision in repo.revisions
+        if len(revision.refs) == 0
+    }
+    if not detached:
+        return
+
+    strategy = cache.delete_revisions(*sorted(detached))
+    strategy.execute()
+    console.print(f"[dim]Pruned {len(detached)} detached revision(s), freed {strategy.expected_freed_size_str}[/dim]")
 
 
 def download_gguf(
