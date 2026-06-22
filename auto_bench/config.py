@@ -156,6 +156,7 @@ class AgentConfig(BaseModel):
     setup_multiplier: float = 10.0    # --agent-setup-timeout-multiplier
     agent_timeout_multiplier: float = 1.0  # --agent-timeout-multiplier
     max_retries: int = 0              # -r (max retry attempts per trial)
+    max_iterations: int | None = None  # --ak max_iterations=N (OpenHands only)
     # --ak key="value" entries (openhands version/python_version auto-injected)
     agent_kwargs: list[str] = Field(default_factory=list)
     # Additional --ae KEY=VALUE entries for the agent container

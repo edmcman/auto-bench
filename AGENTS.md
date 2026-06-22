@@ -73,7 +73,7 @@ Backend (ABC)
 
 **SamplingConfig** — `temperature`, `top_p`, `top_k`, `min_p`, `max_tokens`, `extra` (forwarded to OpenAI client `extra_body`)
 
-**AgentConfig** — `agent`, `env`, `attempts`, `limit`, `trials`, `setup_multiplier`, `agent_timeout_multiplier`, `max_retries`, `agent_kwargs`, `agent_env`, `extra_args`
+**AgentConfig** — `agent`, `env`, `attempts`, `limit`, `trials`, `setup_multiplier`, `agent_timeout_multiplier`, `max_retries`, `max_iterations`, `agent_kwargs`, `agent_env`, `extra_args`
 
 ### Agent Invocation (`agent.py`)
 
@@ -86,6 +86,7 @@ Harbor flag mapping from `AgentConfig`:
 - `setup_multiplier` → `--agent-setup-timeout-multiplier`
 - `agent_timeout_multiplier` → `--agent-timeout-multiplier` (multiplier on each task's agent execution timeout)
 - `max_retries` → `--max-retries` (max retry attempts per trial)
+- `max_iterations` → `--ak max_iterations=N` (OpenHands only; limits agent steps per task)
 - `agent_kwargs` → `--ak` (repeated); openhands `version`/`python_version` are auto-injected
 - `agent_env` → `--ae` (repeated; `OPENAI_BASE_URL` and `OPENAI_API_KEY` also auto-injected)
 - `extra_args` → appended verbatim

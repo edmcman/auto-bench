@@ -94,6 +94,8 @@ def run_agent(config: RunConfig, backend: Backend, output_dir: Path) -> Path:
     agent_kwargs = list(agent_cfg.agent_kwargs)
     if agent_cfg.agent == "openhands":
         existing_keys = {kv.split("=")[0] for kv in agent_kwargs}
+        if agent_cfg.max_iterations is not None and "max_iterations" not in existing_keys:
+            agent_kwargs.append(f"max_iterations={agent_cfg.max_iterations}")
         for default_kv in _OPENHANDS_DEFAULT_KWARGS:
             key = default_kv.split("=")[0]
             if key not in existing_keys:
