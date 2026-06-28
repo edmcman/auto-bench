@@ -4,7 +4,7 @@ local d = import 'lib/qwen35.libsonnet';
 local quants = import 'lib/quants.libsonnet';
 local entries = quants.qwen_2b;
 
-local base = d {
+local base = d.nonthinking_general {
   name: "qwen-2b-quant-sweep",
   instance_ids: ["swe-bench/sympy__sympy-22914"],
   model: {

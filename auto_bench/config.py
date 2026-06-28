@@ -78,6 +78,8 @@ class BackendOptions(BaseModel):
     """Experiment-level backend settings."""
     ctx_size: int | None = None      # per-slot context size; llamacpp passes parallel*ctx_size
     parallel: int = 1                # parallel decoding slots / concurrent sequences
+    # --chat-template-kwargs JSON (both backends), e.g. {"enable_thinking": false}
+    chat_template_kwargs: dict[str, Any] | None = None
 
 
 class OpenAIConfig(BaseModel):

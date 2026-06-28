@@ -1,6 +1,7 @@
 """llama.cpp server backend."""
 from __future__ import annotations
 
+import json
 import shlex
 import shutil
 from pathlib import Path
@@ -63,6 +64,8 @@ class LlamaCppBackend(SubprocessBackend):
             inner_args += ["--fit", "on"]
         else:
             inner_args += ["--n-gpu-layers", str(cfg.n_gpu_layers)]
+        if self.backend_options.chat_template_kwargs:
+            inner_args += ["--chat-template-kwargs", json.dumps(self.backend_options.chat_template_kwargs)]
         inner_args.extend(cfg.extra_args)
 
         parts = shlex.split(cfg.cmd_template.format(

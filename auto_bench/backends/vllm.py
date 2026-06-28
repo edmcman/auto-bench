@@ -85,6 +85,8 @@ class VllmBackend(SubprocessBackend):
             inner_args += ["--api-key", cfg.api_key]
         if cfg.chat_template:
             inner_args += ["--chat-template", cfg.chat_template]
+        if self.backend_options.chat_template_kwargs:
+            inner_args += ["--chat-template-kwargs", json.dumps(self.backend_options.chat_template_kwargs)]
         if cfg.tool_call_parser:
             inner_args += ["--enable-auto-tool-choice", "--tool-call-parser", cfg.tool_call_parser]
         inner_args.extend(cfg.extra_args)

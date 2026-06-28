@@ -11,7 +11,7 @@ local ctx_sizes = [
   { label: "ctx-128k", ctx_size: 131072 },
 ];
 
-local base = d {
+local base = d.nonthinking_general {
   name: "ctx-size-sweep",
   instance_ids: ["swe-bench/sympy__sympy-22914"],
   model: {

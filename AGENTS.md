@@ -69,7 +69,7 @@ Backend (ABC)
 - `VllmConfig`: `dtype`, `gpu_memory_utilization`, `tensor_parallel_size`, `pipeline_parallel_size`, `quantization`, `enforce_eager`, `api_key`, `chat_template`, `extra_args`
 - `OpenAIConfig`: `base_url`, `api_key`, `model`
 
-**BackendOptions** — `ctx_size` (per-slot context size; llamacpp passes `parallel * ctx_size` to `--ctx-size`, vllm passes it to `--max-model-len`)
+**BackendOptions** — `ctx_size` (per-slot context size; llamacpp passes `parallel * ctx_size` to `--ctx-size`, vllm passes it to `--max-model-len`), `parallel`, `chat_template_kwargs` (dict passed as `--chat-template-kwargs` JSON to both backends, e.g. `{enable_thinking: false}`)
 
 **SamplingConfig** — `temperature`, `top_p`, `top_k`, `min_p`, `max_tokens`, `extra` (forwarded to OpenAI client `extra_body`)
 
