@@ -5,3 +5,4 @@ __pycache__/
 dist/
 results/
 .claude/settings.local.json
+.vscode/extensions.json
