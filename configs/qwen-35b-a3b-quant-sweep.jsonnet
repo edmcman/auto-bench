@@ -9,31 +9,40 @@ local llamacpp_quants = [
   { label: "Q5_K_M", filename: "Qwen3.5-35B-A3B-Q5_K_M.gguf" },
 ];
 
-local base = d.thinking_coding {
-  name: "qwen-35b-a3b-quant-sweep",
-  model: {
-    source: "huggingface",
-    repo_id: "unsloth/Qwen3.5-35B-A3B-GGUF",
-  },
-  sampling+: { max_tokens: 32768 },
-  agent+: { attempts: 1, agent_timeout_multiplier: 3 },
-  remove_downloaded_models: true,
-};
+local modes = [
+  { label: "thinking", preset: d.thinking_coding },
+  { label: "nonthinking", preset: d.nonthinking_general },
+];
 
-std.map(
-  function(q) parallel.apply(base {
-    name+: "-" + q.label,
-    model+: if std.objectHas(q, 'filenames')
-      then { filenames: q.filenames }
-      else { filename: q.filename },
-  }, nparallel),
-  llamacpp_quants
-) + [
-  parallel.apply(base {
-    name+: "-vllm",
-    backend_type: "vllm",
-    model: { source: "huggingface", repo_id: "Qwen/Qwen3.5-35B-A3B" },
-    // Work around annoying vllm bug #45198
-    vllm+: { extra_args: ["--disable-custom-all-reduce"] },
-  }, nparallel),
-]
+local base(mode) = mode.preset {
+    name: "qwen-35b-a3b-quant-sweep-" + mode.label,
+    model: {
+      source: "huggingface",
+      repo_id: "unsloth/Qwen3.5-35B-A3B-GGUF",
+    },
+    sampling+: { max_tokens: 32768 },
+    agent+: { attempts: 1, agent_timeout_multiplier: 3 },
+    remove_downloaded_models: true,
+  };
+
+std.flattenArrays(std.map(
+  function(mode)
+    std.map(
+      function(q) parallel.apply(base(mode) {
+        name+: "-" + q.label,
+        model+: if std.objectHas(q, 'filenames')
+          then { filenames: q.filenames }
+          else { filename: q.filename },
+      }, nparallel),
+      llamacpp_quants
+    ) + [
+      parallel.apply(base(mode) {
+        name+: "-vllm",
+        backend_type: "vllm",
+        model: { source: "huggingface", repo_id: "Qwen/Qwen3.5-35B-A3B" },
+        // Work around annoying vllm bug #45198
+        vllm+: { extra_args: ["--disable-custom-all-reduce"] },
+      }, nparallel),
+    ],
+  modes
+))
