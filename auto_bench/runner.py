@@ -170,7 +170,7 @@ def _compress_jobs(source_dir: Path, archive_path: Path) -> None:
 def _fix_docker_permissions(path: Path) -> None:
     """chmod root-owned files written by Harbor containers so the host user can delete them."""
     subprocess.run(
-        ["docker", "run", "--rm", "-v", f"{path}:/target", "alpine", "chmod", "-R", "777", "/target"],
+        ["docker", "run", "--rm", "-v", f"{path.resolve()}:/target", "alpine", "chmod", "-R", "777", "/target"],
         check=False,
     )
 
