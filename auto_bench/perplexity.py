@@ -72,7 +72,7 @@ def _parse_ppl(output: str, kl_mode: bool = False) -> float:
 
 
 def _parse_kl(output: str) -> float:
-    m = re.search(r"Mean\s+KLD\s*:\s*([\d.]+)", output)
+    m = re.search(r"Mean\s+KLD\s*:\s*(-?[\d.]+)", output)
     if not m:
         raise ValueError(f"Could not parse KLD from output:\n{output[-1000:]}")
     return float(m.group(1))
