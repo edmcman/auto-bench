@@ -9,6 +9,7 @@ import tarfile
 import time
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from rich.console import Console
 from rich.table import Table
@@ -23,6 +24,76 @@ from .downloader import remove_from_cache
 from .evaluator import collect_harbor_results, parse_results
 
 console = Console()
+
+
+class ConfigProvenanceError(ValueError):
+    """Raised when result config provenance cannot be written or verified."""
+
+
+def _compiled_config_path(result_dir: Path, config_source: Path) -> Path:
+    return result_dir / f"{config_source.stem}.json"
+
+
+def _canonical_json(data: Any) -> str:
+    """Return type-sensitive canonical JSON for structural comparisons."""
+    return json.dumps(
+        data,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    )
+
+
+def _write_config_provenance(
+    result_dir: Path,
+    config_source: Path,
+    compiled_config: Any,
+) -> None:
+    """Copy source jsonnet and write its pre-local-merge compiled JSON."""
+    source_destination = result_dir / config_source.name
+    compiled_destination = _compiled_config_path(result_dir, config_source)
+    try:
+        shutil.copy2(config_source, source_destination)
+        compiled_destination.write_text(
+            json.dumps(compiled_config, indent=2, sort_keys=True, allow_nan=False) + "\n"
+        )
+    except (OSError, TypeError, ValueError) as exc:
+        raise ConfigProvenanceError(
+            f"Could not save config provenance in {result_dir}: {exc}"
+        ) from exc
+
+
+def _validate_resume_config(
+    sweep_dir: Path,
+    config_source: Path,
+    compiled_config: Any,
+) -> None:
+    """Require the stored compiled config to equal the current compilation."""
+    compiled_path = _compiled_config_path(sweep_dir, config_source)
+    if not compiled_path.is_file():
+        raise ConfigProvenanceError(
+            f"Cannot resume: compiled config is missing: {compiled_path}"
+        )
+
+    def reject_nonstandard_constant(value: str) -> None:
+        raise ValueError(f"non-standard JSON constant {value}")
+
+    try:
+        existing = json.loads(
+            compiled_path.read_text(),
+            parse_constant=reject_nonstandard_constant,
+        )
+        existing_canonical = _canonical_json(existing)
+        current_canonical = _canonical_json(compiled_config)
+    except (OSError, json.JSONDecodeError, TypeError, ValueError) as exc:
+        raise ConfigProvenanceError(
+            f"Cannot resume: invalid compiled config {compiled_path}: {exc}"
+        ) from exc
+
+    if existing_canonical != current_canonical:
+        raise ConfigProvenanceError(
+            f"Cannot resume: current compiled config does not match {compiled_path}"
+        )
 
 
 def _download(backend: Backend) -> str:
@@ -179,6 +250,8 @@ def run_single(
     config: RunConfig,
     logits_save: Path | None = None,
     logits_base: Path | None = None,
+    config_source: Path | None = None,
+    compiled_config: Any = None,
 ) -> dict:
     """
     Run a single (non-sweep) pipeline: download → start → agent → stop → ppl → evaluate.
@@ -190,6 +263,8 @@ def run_single(
     run_id = f"{config.name}_{timestamp}"
     output_dir = Path(config.output_dir) / run_id
     output_dir.mkdir(parents=True, exist_ok=True)
+    if config_source is not None:
+        _write_config_provenance(output_dir, config_source, compiled_config)
 
     console.rule(f"[bold blue]Run: {run_id}")
 
@@ -310,7 +385,14 @@ def run_single(
     }
 
 
-def run_pipeline(runs: list[RunConfig], *, sweep_name: str | None = None, resume_from: Path | None = None) -> list[dict]:
+def run_pipeline(
+    runs: list[RunConfig],
+    *,
+    sweep_name: str | None = None,
+    resume_from: Path | None = None,
+    config_source: Path | None = None,
+    compiled_config: Any = None,
+) -> list[dict]:
     all_results: list[dict] = []
     is_sweep = len(runs) > 1
 
@@ -320,6 +402,8 @@ def run_pipeline(runs: list[RunConfig], *, sweep_name: str | None = None, resume
             sweep_dir = Path(runs[0].output_dir)
         else:
             sweep_dir = resume_from
+            if config_source is not None:
+                _validate_resume_config(sweep_dir, config_source, compiled_config)
             completed = _find_completed_entries(sweep_dir)
             if completed:
                 console.print(
@@ -335,6 +419,8 @@ def run_pipeline(runs: list[RunConfig], *, sweep_name: str | None = None, resume
         else:
             sweep_dir = Path(runs[0].output_dir)
         sweep_dir.mkdir(parents=True, exist_ok=True)
+        if is_sweep and config_source is not None:
+            _write_config_provenance(sweep_dir, config_source, compiled_config)
         runs_to_do = runs
 
     for run_config in runs_to_do:
@@ -358,6 +444,8 @@ def run_pipeline(runs: list[RunConfig], *, sweep_name: str | None = None, resume
                 run_config,
                 logits_save=ref_logits if is_reference else None,
                 logits_base=ref_logits if (ref_logits and ref_logits.exists() and not is_reference) else None,
+                config_source=config_source if not is_sweep else None,
+                compiled_config=compiled_config,
             )
             all_results.append(result)
         except Exception as exc:

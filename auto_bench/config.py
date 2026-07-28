@@ -273,18 +273,22 @@ def merge_configs(experiment: ExperimentConfig, local: LocalConfig) -> RunConfig
     return RunConfig.model_validate(data)
 
 
-def load_experiment_configs(path: Path) -> list[ExperimentConfig]:
-    """Evaluate a jsonnet config file and return validated ExperimentConfigs.
-
-    The jsonnet file may output either a single object (one run) or a list
-    of objects (sweep). Each object is validated as an ExperimentConfig.
-    """
+def evaluate_experiment_config(path: Path) -> Any:
+    """Evaluate a jsonnet config file and return its decoded JSON value."""
     import _jsonnet
 
     path = Path(path)
     json_str = _jsonnet.evaluate_file(str(path))
-    data = json.loads(json_str)
+    return json.loads(json_str)
 
+
+def validate_experiment_configs(data: Any, path: Path) -> list[ExperimentConfig]:
+    """Validate decoded jsonnet output and return ExperimentConfigs.
+
+    The jsonnet file may output either a single object (one run) or a list
+    of objects (sweep). Each object is validated as an ExperimentConfig.
+    """
+    path = Path(path)
     if isinstance(data, dict):
         entries = [data]
     elif isinstance(data, list):
@@ -307,3 +311,8 @@ def load_experiment_configs(path: Path) -> list[ExperimentConfig]:
         raise ValueError(f"Experiment config validation failed:\n" + "\n".join(errors))
 
     return configs
+
+
+def load_experiment_configs(path: Path) -> list[ExperimentConfig]:
+    """Evaluate and validate a jsonnet config file."""
+    return validate_experiment_configs(evaluate_experiment_config(path), path)

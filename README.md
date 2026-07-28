@@ -38,31 +38,35 @@ uv sync
 
 ```bash
 # Validate a config
-uv run auto-bench validate configs/smoke-test.yaml
+uv run auto-bench validate configs/smoke-test.jsonnet
 
 # Download model only (no inference)
-uv run auto-bench download configs/smoke-test.yaml
+uv run auto-bench download configs/smoke-test.jsonnet
 
 # Run the full pipeline (download → server → agent → evaluate)
-uv run auto-bench run configs/smoke-test.yaml
+uv run auto-bench run configs/smoke-test.jsonnet
 
 # Run inference only, skip evaluation
-uv run auto-bench run configs/smoke-test.yaml --skip-eval
+uv run auto-bench run configs/smoke-test.jsonnet --skip-eval
 
 # Start backend server and block until Ctrl+C (useful for manual testing)
-uv run auto-bench serve configs/smoke-test.yaml
+uv run auto-bench serve configs/smoke-test.jsonnet
 
 # Run a quantization sweep
-uv run auto-bench run configs/llama3.1-8b-quant-sweep.yaml
+uv run auto-bench run configs/llama3.1-8b-quant-sweep.jsonnet
 
 # Resume a partially-completed sweep (specify directory)
-uv run auto-bench run configs/llama3.1-8b-quant-sweep.yaml --resume-from results/sweep_llama3.1-8b-quant-sweep_20260428_153012
+uv run auto-bench run configs/llama3.1-8b-quant-sweep.jsonnet --resume-from results/sweep_llama3.1-8b-quant-sweep_20260428_153012
 
 # Resume the most recent sweep automatically
-uv run auto-bench run configs/llama3.1-8b-quant-sweep.yaml --resume
+uv run auto-bench run configs/llama3.1-8b-quant-sweep.jsonnet --resume
 ```
 
 All commands accept `--local` / `-l` to specify a local config file (default: `~/.config/auto-bench/local.yaml`).
+
+Resuming a sweep requires its saved compiled JSON to be structurally equivalent
+to the current Jsonnet output. The resume aborts before running any entries if
+the file is missing, invalid, or different.
 
 ---
 
@@ -198,6 +202,8 @@ Each run creates a timestamped directory under `output_dir`:
 ```
 results/
 └── my-run_20240428_153012/
+    ├── my-run.jsonnet        # original experiment config
+    ├── my-run.json           # compiled experiment config (before local merge)
     ├── run_meta.json         # perplexity and runtime saved for --resume
     └── jobs/                 # Harbor output
         └── <instance-id>/
@@ -210,6 +216,8 @@ Sweep runs collect entries under a parent `sweep_{name}_{timestamp}/` directory:
 ```
 results/
 └── sweep_llama3.1-8b-quant-sweep_20240428_153012/
+    ├── llama3.1-8b-quant-sweep.jsonnet  # original sweep config
+    ├── llama3.1-8b-quant-sweep.json     # compiled sweep (before local merge)
     ├── summary.md            # comparison table (updated after each entry)
     ├── llama3.1-8b-quant-sweep-Q4_K_M_20240428_153012/
     │   ├── run_meta.json

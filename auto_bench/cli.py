@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import typer
 import yaml
@@ -64,17 +65,30 @@ def _select_entry(runs: list[RunConfig], entry: str) -> RunConfig:
     raise typer.Exit(1)
 
 
-def _load_configs(config_path: Path, local_path: Path | None = None) -> list[RunConfig]:
-    from .config import ExperimentConfig, load_experiment_configs, merge_configs
+def _load_configs_with_data(
+    config_path: Path,
+    local_path: Path | None = None,
+) -> tuple[list[RunConfig], Any]:
+    from .config import (
+        evaluate_experiment_config,
+        merge_configs,
+        validate_experiment_configs,
+    )
 
     try:
-        experiments = load_experiment_configs(config_path)
+        compiled_data = evaluate_experiment_config(config_path)
+        experiments = validate_experiment_configs(compiled_data, config_path)
     except ValueError as exc:
         console.print(f"[red]Experiment config error:[/red] {exc}")
         raise typer.Exit(1)
 
     local = _load_local(local_path)
-    return [merge_configs(exp, local) for exp in experiments]
+    return [merge_configs(exp, local) for exp in experiments], compiled_data
+
+
+def _load_configs(config_path: Path, local_path: Path | None = None) -> list[RunConfig]:
+    runs, _ = _load_configs_with_data(config_path, local_path)
+    return runs
 
 
 @app.command()
@@ -98,7 +112,7 @@ def run(
 ):
     """Run the full pipeline: download -> start server -> run agent -> evaluate."""
     from .config import RunConfig
-    from .runner import _find_latest_sweep_dir, run_pipeline
+    from .runner import ConfigProvenanceError, _find_latest_sweep_dir, run_pipeline
 
     if resume_from and resume:
         console.print("[red]--resume-from and --resume are mutually exclusive[/red]")
@@ -108,7 +122,7 @@ def run(
         console.print("[red]--keep-jobs and --delete-jobs are mutually exclusive[/red]")
         raise typer.Exit(1)
 
-    runs = _load_configs(config, local)
+    runs, compiled_config = _load_configs_with_data(config, local)
     if skip_eval:
         for r in runs:
             r.evaluation.run_evaluation = False
@@ -134,7 +148,17 @@ def run(
             raise typer.Exit(1)
         console.print(f"[dim]Resuming latest sweep: {resume_from}[/dim]")
 
-    run_pipeline(runs, sweep_name=sweep_name, resume_from=resume_from)
+    try:
+        run_pipeline(
+            runs,
+            sweep_name=sweep_name,
+            resume_from=resume_from,
+            config_source=config,
+            compiled_config=compiled_config,
+        )
+    except ConfigProvenanceError as exc:
+        console.print(f"[red]Config provenance error:[/red] {exc}")
+        raise typer.Exit(1)
 
 
 @app.command()
