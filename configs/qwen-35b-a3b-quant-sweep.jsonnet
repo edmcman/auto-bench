@@ -14,8 +14,10 @@ quant_sweep.make({
   vllm_repo_id: "Qwen/Qwen3.5-35B-A3B",
   llamacpp_quants: llamacpp_quants,
   modes: [
-    { label: "thinking", preset: d.thinking_coding },
-    { label: "nonthinking", preset: d.nonthinking_general },
+    { label: "thinking-general", preset: d.thinking_general },
+    { label: "thinking-coding", preset: d.thinking_coding },
+    { label: "nonthinking-general", preset: d.nonthinking_general },
+    { label: "nonthinking-reasoning", preset: d.nonthinking_reasoning },
   ],
   nparallel: 8,
   // Work around annoying vllm bug #45198
