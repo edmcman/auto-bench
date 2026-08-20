@@ -515,8 +515,8 @@ def _write_sweep_summary_md(results: list[dict], sweep_dir: Path) -> None:
     """Write summary.md to *sweep_dir* from the current results list."""
     lines = [
         "# Sweep Summary\n",
-        "| Run | Resolved | % | PPL | KL | Runtime | Exceptions |",
-        "|-----|----------|---|-----|----|---------|-----------:|",
+        "| Run | Resolved | % | PPL | KL | Runtime | Version | Exceptions |",
+        "|-----|----------|---|-----|----|---------|---------|-----------:|",
     ]
     short_names = _strip_common_prefix([r["name"] for r in results])
     for r, short_name in zip(results, short_names):
@@ -525,8 +525,9 @@ def _write_sweep_summary_md(results: list[dict], sweep_dir: Path) -> None:
         exceptions = _fmt_exceptions(r.get("results", {}))
         ppl = f"{r['perplexity']:.2f}" if r.get("perplexity") else "—"
         kl = _fmt_kl(r.get("kl_divergence"))
+        version = r.get("version") or "—"
         lines.append(
-            f"| {short_name} | {resolved}/{total} | {pct:.1f}% | {ppl} | {kl} | {runtime} | {exceptions} |"
+            f"| {short_name} | {resolved}/{total} | {pct:.1f}% | {ppl} | {kl} | {runtime} | {version} | {exceptions} |"
         )
     header = lines[0]
     table = "\n".join(lines[1:])

@@ -16,6 +16,15 @@ console = Console()
 _TAIL = 3000
 
 
+def _extract_llamacpp_version(stdout: str, stderr: str) -> str | None:
+    """Extract the concise value from llama.cpp's ``version:`` line."""
+    for line in (*stdout.splitlines(), *stderr.splitlines()):
+        prefix, separator, value = line.strip().partition(":")
+        if separator and prefix == "version" and value.strip():
+            return value.strip()
+    return None
+
+
 class SubprocessBackend(OpenAIBackend):
     server_name: str = "server"
     log_filename: str = "server.log"
@@ -103,6 +112,10 @@ class SubprocessBackend(OpenAIBackend):
             result = subprocess.run(
                 [resolved, "--version"], capture_output=True, text=True, timeout=10
             )
-            return result.stdout.strip() if result.returncode == 0 else None
+            if result.returncode != 0:
+                return None
+            if bt == "llamacpp":
+                return _extract_llamacpp_version(result.stdout, result.stderr)
+            return result.stdout.strip()
         except Exception:
             return None

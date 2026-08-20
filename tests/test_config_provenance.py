@@ -87,6 +87,7 @@ def test_single_run_stores_source_and_compiled_json(tmp_path: Path, monkeypatch)
     result_dir = Path(result["output_dir"])
     assert (result_dir / source.name).read_text() == source.read_text()
     assert json.loads((result_dir / "experiment.json").read_text()) == compiled
+    assert json.loads((result_dir / "run_meta.json").read_text())["version"] == "test"
 
 
 def test_new_sweep_stores_provenance_only_at_root(tmp_path: Path, monkeypatch) -> None:
@@ -127,6 +128,23 @@ def test_new_sweep_stores_provenance_only_at_root(tmp_path: Path, monkeypatch) -
     assert json.loads((sweep_dir / "sweep.json").read_text()) == compiled
     assert all(not (entry_dir / source.name).exists() for entry_dir in entry_dirs)
     assert all(not (entry_dir / "sweep.json").exists() for entry_dir in entry_dirs)
+
+
+def test_sweep_summary_includes_version(tmp_path: Path) -> None:
+    runner._write_sweep_summary_md(
+        [
+            {
+                "name": "llamacpp-run",
+                "results": {"resolved": 1, "total": 1},
+                "version": "9009 (0754b7b6f)",
+            }
+        ],
+        tmp_path,
+    )
+
+    summary = (tmp_path / "summary.md").read_text()
+    assert "| Version |" in summary
+    assert "| 9009 (0754b7b6f) |" in summary
 
 
 def test_resume_accepts_equivalent_json_without_recopying(tmp_path: Path, monkeypatch) -> None:
