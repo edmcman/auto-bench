@@ -11,7 +11,7 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y git build-essential cmake libo
 
 install_dir=/opt/llama.cpp
 rm -rf "$install_dir"
-git clone --branch b9009 https://github.com/ggml-org/llama.cpp.git "$install_dir"
+git clone --branch master https://github.com/ggml-org/llama.cpp.git "$install_dir"
 
 feature_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 install -m 0755 "$feature_dir/llama-cpp-build.sh" /usr/local/bin/llama-cpp-build.sh
