@@ -11,6 +11,9 @@
 //   m.quants           // -> every quant in the repo, as {label, filename[s]}
 //   m.pick(["BF16", "Q8_0"])  // -> that subset, in the order given
 //
+// Models with a `-MTP-GGUF` repo have a second catalog entry ('27b-mtp'), built
+// with `mtp()` -- see below.
+//
 // Quants are declared compactly; `model()` expands them:
 //   "Q8_0"                     -> Qwen3.5-27B-Q8_0.gguf
 //   { label: "BF16", shards: 2 }  -> BF16/Qwen3.5-27B-BF16-00001-of-00002.gguf, ...
@@ -53,7 +56,7 @@
     quant(label)::
       local hits = std.filter(function(q) q.label == label, this.quants);
       if std.length(hits) == 0 then
-        error "unknown quant %s for %s (have: %s)" % [label, name, std.join(", ", this.labels)]
+        error "unknown quant %s for %s (have: %s)" % [label, this.name, std.join(", ", this.labels)]
       else
         hits[0],
 
@@ -65,16 +68,34 @@
     // ... or from an expanded {label, filename[s]} entry, so callers can also
     // use a GGUF that isn't in the catalog.
     gguf_of(q):: {
-      name: name + "-" + q.label,
+      name: this.name + "-" + q.label,
       source: "huggingface",
       repo_id: this.gguf_repo_id,
     } + (if std.objectHas(q, "filenames") then { filenames: q.filenames } else { filename: q.filename }),
 
     // Model block for the vllm backend (unquantized upstream weights).
     hf():: {
-      name: name,
+      name: this.name,
       source: "huggingface",
       repo_id: this.vllm_repo_id,
     },
   },
+
+  // The same model from its parallel `unsloth/<name>-MTP-GGUF` repo: identical
+  // weights with the multi-token-prediction layer kept (~2% larger), which
+  // llama.cpp can use for self-speculative decoding. The .gguf files are named
+  // exactly as in the base repo, so only the repo id and the entry's display
+  // name change -- but the published quant list differs per repo, so it is
+  // passed in rather than inherited.
+  //
+  // Pair with `llamacpp+: g.mtp_spec` to actually turn speculative decoding on;
+  // without it the model simply runs as normal and the MTP layer is unused.
+  mtp(name, quants):: $.model(name, quants) {
+    name: name + "-MTP",
+    gguf_repo_id: "unsloth/" + name + "-MTP-GGUF",
+  },
+
+  // llama.cpp flags enabling MTP self-speculative decoding. Requires a build
+  // with `--spec-type draft-mtp` support (llama.cpp master as of mid-2026).
+  mtp_spec:: { extra_args: ["--spec-type", "draft-mtp", "--spec-draft-n-max", "2"] },
 }

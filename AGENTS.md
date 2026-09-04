@@ -143,7 +143,15 @@ Quants are declared compactly and expanded by `g.model`: `"Q8_0"` → `<name>-Q8
 `{label: "BF16", shards: 2}` → `BF16/<name>-BF16-00001-of-00002.gguf`, …; an explicit
 `{label, filename|filenames}` object passes through. An unknown label is a jsonnet error
 listing the available ones, rather than a 404 at download time. Catalogs cover the quants
-only — mmproj, imatrix and MTP draft files are omitted, as are the separate `-MTP-GGUF` repos.
+only — mmproj, imatrix and MTP draft files are omitted.
+
+Models published a second time as `unsloth/<name>-MTP-GGUF` (identical weights with the
+multi-token-prediction layer kept, ~2% larger) get a `-mtp` catalog entry built by `g.mtp`,
+e.g. `d.models['27b-mtp']`. They run like any other GGUF; to use the MTP layer for
+self-speculative decoding, add `llamacpp+: gguf.mtp_spec` (`--spec-type draft-mtp
+--spec-draft-n-max 2`, needs a llama.cpp build supporting it). Published quant lists differ
+between a base repo and its MTP repo, so each is listed separately. Qwen 3.8 has no such
+repos — it ships a separate MTP draft module inside the base repo instead.
 
 `quant_sweep.make` takes a catalog entry as `model:` and label strings as `quants:`
 (defaulting to the whole repo).

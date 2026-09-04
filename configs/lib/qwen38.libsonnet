@@ -25,7 +25,9 @@
 // `models` is the family's model catalog (see gguf.libsonnet): repo ids and
 // every quant published in the Unsloth GGUF repo. Only 27B is catalogued --
 // Qwen3.8-2.4T-A95B and Qwen3.8-Flash-Next also ship GGUFs, but nothing here
-// runs them yet.
+// runs them yet. Unlike 3.5/3.6 there are no `-MTP-GGUF` repos and so no `-mtp`
+// entries; 3.8 instead ships a separate MTP draft module inside the base repo
+// (`MTP/mtp-Qwen3.8-27B-Q4_0.gguf`), which this harness has no way to wire up.
 //   local m = d.models['27b'];  m.gguf("Q8_0") / m.hf() / m.quants
 local defaults = import 'defaults.libsonnet';
 local g = import 'gguf.libsonnet';

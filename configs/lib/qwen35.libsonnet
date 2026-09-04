@@ -8,7 +8,8 @@
 // backends) to match its mode: thinking_* enable it, nonthinking_* disable it.
 //
 // `models` is the family's model catalog (see gguf.libsonnet): repo ids and
-// every quant published in each Unsloth GGUF repo.
+// every quant published in each Unsloth GGUF repo, with a `-mtp` entry per
+// model for the parallel `-MTP-GGUF` repo.
 //   local m = d.models['27b'];  m.gguf("Q8_0") / m.hf() / m.quants
 local defaults = import 'defaults.libsonnet';
 local g = import 'gguf.libsonnet';
@@ -89,6 +90,36 @@ local common = defaults {
       "UD-IQ3_XXS", "UD-IQ4_NL", "UD-IQ4_XS", "UD-Q2_K_XL",
       "UD-Q3_K_XL", "UD-Q4_K_L", "UD-Q4_K_XL", "UD-Q5_K_XL",
       "UD-Q6_K_S", "UD-Q6_K_XL", "UD-Q8_K_XL",
+    ]),
+
+    // MTP variants: same weights from unsloth/<model>-MTP-GGUF, usable for
+    // self-speculative decoding (pair with `llamacpp+: gguf.mtp_spec`).
+    // Quant lists differ from the base repos, so they are spelled out.
+    "2b-mtp": g.mtp("Qwen3.5-2B", [
+      "BF16", "IQ4_NL", "IQ4_XS", "Q3_K_M",
+      "Q3_K_S", "Q4_0", "Q4_1", "Q4_K_M",
+      "Q4_K_S", "Q5_K_M", "Q5_K_S", "Q6_K",
+      "Q8_0", "UD-IQ2_M", "UD-IQ3_XXS", "UD-Q2_K_XL",
+      "UD-Q3_K_XL", "UD-Q4_K_XL", "UD-Q5_K_XL", "UD-Q6_K_XL",
+      "UD-Q8_K_XL",
+    ]),
+    "27b-mtp": g.mtp("Qwen3.5-27B", [
+      { label: "BF16", shards: 2 },
+      "IQ4_NL", "IQ4_XS", "Q3_K_M", "Q3_K_S",
+      "Q4_0", "Q4_1", "Q4_K_M", "Q4_K_S",
+      "Q5_K_M", "Q5_K_S", "Q6_K", "Q8_0",
+      "UD-IQ2_M", "UD-IQ2_XXS", "UD-IQ3_XXS", "UD-Q2_K_XL",
+      "UD-Q3_K_XL", "UD-Q4_K_XL", "UD-Q5_K_XL", "UD-Q6_K_XL",
+      "UD-Q8_K_XL",
+    ]),
+    "35b-a3b-mtp": g.mtp("Qwen3.5-35B-A3B", [
+      { label: "BF16", shards: 2 },
+      "MXFP4_MOE", "Q8_0", "UD-IQ1_M", "UD-IQ2_M",
+      "UD-IQ2_XXS", "UD-IQ3_S", "UD-IQ3_XXS", "UD-IQ4_NL",
+      "UD-IQ4_XS", "UD-Q2_K_XL", "UD-Q3_K_M", "UD-Q3_K_XL",
+      "UD-Q4_K_M", "UD-Q4_K_S", "UD-Q4_K_XL", "UD-Q5_K_M",
+      "UD-Q5_K_S", "UD-Q5_K_XL", "UD-Q6_K", "UD-Q6_K_XL",
+      "UD-Q8_K_XL",
     ]),
   },
 }
