@@ -200,13 +200,22 @@ def serve_model(config: RunConfig, dry_run: bool = False) -> None:
     console.rule(f"[bold blue]Serve: {run_id}")
     backend = make_backend(config)
 
-    console.print("\n[bold]Step 1/3:[/bold] Downloading model...")
-    model_path = _download(backend)
-
-    cmd = backend.build_start_command(model_path)
     if dry_run:
+        # Show the command without fetching weights: use the real path when the
+        # model happens to be cached, else a stand-in for the not-yet-downloaded
+        # file, so the rest of the flags can still be inspected.
+        model_path = backend.cached_model_path()
+        if model_path is None:
+            console.print(
+                "[yellow]Model is not downloaded; --dry-run does not fetch it. "
+                "The model path below is a placeholder.[/yellow]"
+            )
+        cmd = backend.build_start_command(model_path or "MODEL_PATH")
         console.print(f"\n[cyan]Would run:[/cyan] {' '.join(cmd)}")
         return
+
+    console.print("\n[bold]Step 1/3:[/bold] Downloading model...")
+    model_path = _download(backend)
 
     output_dir.mkdir(parents=True, exist_ok=True)
 

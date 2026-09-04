@@ -26,6 +26,13 @@ class Backend(ABC):
         Returns the local path (GGUF file or directory) on disk.
         """
 
+    def cached_model_path(self) -> str | None:
+        """
+        Local model path *without* downloading: the path if the model is already
+        present on disk, else None. Used by `serve --dry-run`.
+        """
+        return None
+
     @abstractmethod
     def start(self, model_path: str, output_dir: Path | None = None) -> None:
         """Launch the server process. If output_dir is given, write server log there."""

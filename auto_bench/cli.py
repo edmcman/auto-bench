@@ -212,7 +212,7 @@ def serve(
         None, "--local", "-l",
         help="Path to local config (default: ~/.config/auto-bench/local.yaml)",
     ),
-    dry_run: bool = typer.Option(False, "--dry-run", "-n", help="Print the backend command and exit without running it"),
+    dry_run: bool = typer.Option(False, "--dry-run", "-n", help="Print the backend command and exit without downloading the model or running it"),
     entry: str = typer.Option(None, "--entry", "-e", help="Sweep entry to serve: 0-based index or name substring"),
 ):
     """Download model and start the backend server. Runs until Ctrl+C."""

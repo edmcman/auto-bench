@@ -8,25 +8,22 @@ from rich.console import Console
 console = Console()
 
 
-def is_gguf_cached(repo_id: str, filename: str, revision: str = "main") -> bool:
-    """Return True if the GGUF file is already in the local HF cache."""
+def cached_gguf_path(repo_id: str, filename: str, revision: str = "main") -> str | None:
+    """Local path of a GGUF already in the HF cache, or None. Never downloads."""
     from huggingface_hub import try_to_load_from_cache
 
     result = try_to_load_from_cache(repo_id, filename, revision=revision)
-    return isinstance(result, str)
+    return result if isinstance(result, str) else None
 
 
-def is_snapshot_cached(repo_id: str, revision: str = "main") -> bool:
-    """Return True if the HF repo snapshot is already in the local cache."""
-    from huggingface_hub import scan_cache_dir
+def cached_snapshot_path(repo_id: str, revision: str = "main") -> str | None:
+    """Local path of a fully cached HF snapshot, or None. Never downloads."""
+    from huggingface_hub import snapshot_download
 
-    cache = scan_cache_dir()
-    for repo in cache.repos:
-        if repo.repo_id == repo_id and repo.repo_type == "model":
-            for cached_revision in repo.revisions:
-                if cached_revision.commit_hash == revision or revision in cached_revision.refs:
-                    return True
-    return False
+    try:
+        return snapshot_download(repo_id=repo_id, revision=revision, local_files_only=True)
+    except Exception:
+        return None
 
 
 def remove_from_cache(model_path: str) -> None:

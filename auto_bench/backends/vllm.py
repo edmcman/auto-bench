@@ -11,7 +11,7 @@ from pathlib import Path
 from rich.console import Console
 
 from ..config import BackendConfig, BackendOptions, ModelConfig, SamplingConfig
-from ..downloader import download_hf_snapshot
+from ..downloader import cached_snapshot_path, download_hf_snapshot
 from .subprocess_backend import SubprocessBackend
 
 console = Console()
@@ -50,6 +50,12 @@ class VllmBackend(SubprocessBackend):
             allow_patterns=self.model.allow_patterns,
             ignore_patterns=self.model.ignore_patterns,
         )
+
+    def cached_model_path(self) -> str | None:
+        if (path := self._resolve_local_model()) is not None:
+            return path
+        assert self.model.repo_id, "model.repo_id is required for vllm backend"
+        return cached_snapshot_path(self.model.repo_id, revision=self.model.revision)
 
     def build_start_command(self, model_path: str) -> list[str]:
         cfg = self.backend.vllm

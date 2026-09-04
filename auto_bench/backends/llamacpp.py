@@ -9,7 +9,7 @@ from pathlib import Path
 from rich.console import Console
 
 from ..config import BackendConfig, BackendOptions, ModelConfig, SamplingConfig
-from ..downloader import download_gguf, download_gguf_shards
+from ..downloader import cached_gguf_path, download_gguf, download_gguf_shards
 from .subprocess_backend import SubprocessBackend
 
 console = Console()
@@ -42,6 +42,16 @@ class LlamaCppBackend(SubprocessBackend):
             revision=self.model.revision,
             token=self.model.hf_token,
         )
+
+    def cached_model_path(self) -> str | None:
+        if (path := self._resolve_local_model()) is not None:
+            return path
+        assert self.model.repo_id, "model.repo_id is required for llamacpp backend"
+        # Shards live in one snapshot dir and llama.cpp discovers the rest from
+        # the first, so the first filename is the path that matters either way.
+        filename = self.model.filename or (self.model.filenames or [None])[0]
+        assert filename, "model.filename or model.filenames (GGUF filename(s)) is required for llamacpp backend"
+        return cached_gguf_path(self.model.repo_id, filename, revision=self.model.revision)
 
     def build_start_command(self, model_path: str) -> list[str]:
         cfg = self.backend.llamacpp
