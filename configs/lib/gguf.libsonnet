@@ -1,13 +1,13 @@
-// Helpers for describing an Unsloth GGUF repo and its upstream Qwen repo.
-// Used by the per-family libs (qwen35/qwen36/qwen38.libsonnet) to declare a
-// `models` catalog, so configs name a model and a quant label instead of
+// Helpers for describing an Unsloth GGUF repo and the upstream repo it quantizes.
+// Used by the per-family libs (qwen35/qwen36/qwen38/gemma4.libsonnet) to declare
+// a `models` catalog, so configs name a model and a quant label instead of
 // spelling out repo ids and .gguf filenames.
 //
 //   local d = import 'lib/qwen35.libsonnet';
 //   local m = d.models['27b'];
 //   m.gguf("Q8_0")     // -> model block for llamacpp (repo_id + filename)
 //   m.gguf("BF16")     // -> model block with `filenames` for sharded quants
-//   m.hf()             // -> model block for vllm (upstream Qwen repo)
+//   m.hf()             // -> model block for vllm (upstream repo)
 //   m.quants           // -> every quant in the repo, as {label, filename[s]}
 //   m.pick(["BF16", "Q8_0"])  // -> that subset, in the order given
 //
@@ -41,13 +41,18 @@
     else
       spec,
 
-  // A catalog entry: an Unsloth GGUF repo plus the upstream Qwen repo vLLM uses.
-  model(name, quants):: {
+  // A catalog entry: an Unsloth GGUF repo plus the upstream repo vLLM uses.
+  //
+  // Both repo ids default to the Qwen layout -- `unsloth/<name>-GGUF` and
+  // `Qwen/<name>` -- and `opts` overrides either. Other vendors keep the first
+  // (Unsloth names its repos the same way) but need the second, e.g.
+  //   g.model("gemma-4-26B-A4B-it", quants, { vllm_repo_id: "google/gemma-4-26B-A4B-it" })
+  model(name, quants, opts={}):: {
     local this = self,
 
     name: name,
-    gguf_repo_id: "unsloth/" + name + "-GGUF",
-    vllm_repo_id: "Qwen/" + name,
+    gguf_repo_id: std.get(opts, "gguf_repo_id", "unsloth/" + name + "-GGUF"),
+    vllm_repo_id: std.get(opts, "vllm_repo_id", "Qwen/" + name),
     quants: [$.quant(name, q) for q in quants],
     labels: [q.label for q in self.quants],
 
@@ -90,9 +95,9 @@
   //
   // Pair with `llamacpp+: g.mtp_spec` to actually turn speculative decoding on;
   // without it the model simply runs as normal and the MTP layer is unused.
-  mtp(name, quants):: $.model(name, quants) {
+  mtp(name, quants, opts={}):: $.model(name, quants, opts) {
     name: name + "-MTP",
-    gguf_repo_id: "unsloth/" + name + "-MTP-GGUF",
+    gguf_repo_id: std.get(opts, "gguf_repo_id", "unsloth/" + name + "-MTP-GGUF"),
   },
 
   // llama.cpp flags enabling MTP self-speculative decoding. Requires a build
