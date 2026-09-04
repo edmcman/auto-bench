@@ -14,12 +14,7 @@ local ctx_sizes = [
 local base = d.nonthinking_general {
   name: "ctx-size-sweep",
   instance_ids: ["swe-bench/sympy__sympy-22914"],
-  model: {
-    name: "Qwen3.5-2B-UD-Q5_K_XL",
-    source: "huggingface",
-    repo_id: "unsloth/Qwen3.5-2B-GGUF",
-    filename: "Qwen3.5-2B-UD-Q5_K_XL.gguf",
-  },
+  model: d.models["2b"].gguf("UD-Q5_K_XL"),
   agent+: { attempts: 1, limit: 1 },
 };
 

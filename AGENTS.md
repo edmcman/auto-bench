@@ -111,10 +111,47 @@ local parallel = import 'lib/parallel.libsonnet';
 parallel.apply(base_config, 4)  // 4x parallelism
 ```
 
+### Model Family Libs (`configs/lib/qwen35.libsonnet`, `qwen36`, `qwen38`)
+
+One lib per Qwen release. Each exports the family's recommended sampling presets
+(`thinking_general`, `thinking_coding`, `nonthinking_general`, …), already merged with
+`defaults.libsonnet` and with `enable_thinking` set to match the mode, plus a `models`
+catalog. Qwen 3.8 additionally exposes `thinking_xhigh`/`thinking_medium`/`thinking_low`,
+which pin its `reasoning_effort` chat-template kwarg.
+
+Sampling values differ per family — notably thinking-mode `presence_penalty` is 1.5 for 3.5
+but 0.0 for 3.6/3.8 — so always take them from the matching lib rather than copying.
+
+### Model Catalogs (`configs/lib/gguf.libsonnet`)
+
+`g.model(name, quants)` describes an Unsloth GGUF repo (`unsloth/<name>-GGUF`) and its
+upstream Qwen repo (`Qwen/<name>`), listing every quant published there. Family libs use it
+to populate `models`; configs then name a model and a quant label instead of writing repo ids
+and `.gguf` filenames:
+
+```jsonnet
+local d = import 'lib/qwen36.libsonnet';
+local m = d.models['27b'];
+m.gguf("UD-Q4_K_XL")  // llamacpp model block (repo_id + filename)
+m.gguf("BF16")        // sharded quant → filenames list
+m.hf()                // vllm model block (upstream Qwen repo)
+m.quants              // every quant, as {label, filename|filenames}
+m.pick(["BF16", "Q8_0"])
+```
+
+Quants are declared compactly and expanded by `g.model`: `"Q8_0"` → `<name>-Q8_0.gguf`;
+`{label: "BF16", shards: 2}` → `BF16/<name>-BF16-00001-of-00002.gguf`, …; an explicit
+`{label, filename|filenames}` object passes through. An unknown label is a jsonnet error
+listing the available ones, rather than a 404 at download time. Catalogs cover the quants
+only — mmproj, imatrix and MTP draft files are omitted, as are the separate `-MTP-GGUF` repos.
+
+`quant_sweep.make` takes a catalog entry as `model:` and label strings as `quants:`
+(defaulting to the whole repo).
+
 ## Key Design Points
 
 - **Two-tier config**: Experiment jsonnet describes what to run; `~/.config/auto-bench/local.yaml` describes how to run it (host, ports, tokens). This keeps experiment configs portable.
-- **Sweep mode in jsonnet**: A jsonnet file outputs a list of config objects to define a sweep. Shared data (e.g., quant lists) can be extracted into `configs/lib/*.libsonnet` and imported. The sweep directory is named after the config file stem (e.g., `sweep_qwen-2b-quant-sweep_20250512_120000`).
+- **Sweep mode in jsonnet**: A jsonnet file outputs a list of config objects to define a sweep. Shared data (sampling presets, model/quant catalogs) lives in `configs/lib/*.libsonnet` and is imported. The sweep directory is named after the config file stem (e.g., `sweep_qwen-2b-quant-sweep_20250512_120000`).
 - **OpenAI backend as base class**: `type: openai` skips download/start/stop entirely and points at an already-running server. `LlamaCppBackend` and `VllmBackend` inherit from it for shared properties like `model_name` and `base_url`.
 - **Docker gateway vs host**: `host` is the address the server binds on (host-side). `docker_gateway` is the address containers use to reach the host. They default to the same value (`172.17.0.1` on Linux, `host.docker.internal` on macOS/Docker Desktop) but differ when, e.g., the server binds on `127.0.0.1` while containers still need the bridge IP.
 - **OpenHands --ak defaults**: `version="0.57.0"` and `python_version="3.12"` are automatically prepended to `--ak` for OpenHands as a workaround for a Harbor bug, unless already specified in `agent_kwargs`.

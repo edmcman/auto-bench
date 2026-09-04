@@ -4,32 +4,35 @@
 // pair, where `preset` is the mode's base config, e.g. a sampling profile) so this
 // helper isn't tied to any particular model family.
 // Usage:
+//   local d = import 'lib/qwen35.libsonnet';
 //   local quant_sweep = import 'lib/quant_sweep.libsonnet';
 //   quant_sweep.make({
 //     name_prefix: "qwen-27b-quant-sweep",
-//     gguf_repo_id: "unsloth/Qwen3.5-27B-GGUF",
-//     vllm_repo_id: "Qwen/Qwen3.5-27B",
-//     llamacpp_quants: [
-//       { label: "Q8_0", filename: "Qwen3.5-27B-Q8_0.gguf" },
-//     ],
+//     model: d.models['27b'],
+//     quants: ["BF16", "Q8_0", "Q5_K_M"],   // labels from the model's catalog
 //     modes: [
 //       { label: "thinking", preset: d.thinking_coding },
 //       { label: "nonthinking", preset: d.nonthinking_general },
 //     ],
 //     nparallel: 8,
 //   })
+// `quants` may also hold explicit {label, filename} / {label, filenames} objects
+// for GGUFs outside the catalog; omit it to sweep every quant in the repo.
 local parallel = import 'parallel.libsonnet';
 
 {
   // params:
-  //   name_prefix, gguf_repo_id, vllm_repo_id, llamacpp_quants, modes, nparallel  (required)
+  //   name_prefix, model (a gguf.libsonnet catalog entry), modes, nparallel  (required)
+  //   quants (default: every quant in the model's repo),
   //   max_tokens (default 32768), agent (default {attempts: 1, agent_timeout_multiplier: 3}),
   //   vllm (default {}, merged into the vllm entry), remove_downloaded_models (default true)
   make(params)::
     local name_prefix = params.name_prefix;
-    local gguf_repo_id = params.gguf_repo_id;
-    local vllm_repo_id = params.vllm_repo_id;
-    local llamacpp_quants = params.llamacpp_quants;
+    local m = params.model;
+    local quants = [
+      if std.isString(q) then m.quant(q) else q
+      for q in std.get(params, 'quants', m.quants)
+    ];
     local modes = params.modes;
     local nparallel = params.nparallel;
     local max_tokens = std.get(params, 'max_tokens', 32768);
@@ -39,10 +42,6 @@ local parallel = import 'parallel.libsonnet';
 
     local base(mode) = mode.preset {
       name: name_prefix + "-" + mode.label,
-      model: {
-        source: "huggingface",
-        repo_id: gguf_repo_id,
-      },
       sampling+: { max_tokens: max_tokens },
       agent+: agent_overrides,
       remove_downloaded_models: remove_downloaded_models,
@@ -53,16 +52,14 @@ local parallel = import 'parallel.libsonnet';
         std.map(
           function(q) parallel.apply(base(mode) {
             name+: "-" + q.label,
-            model+: if std.objectHas(q, 'filenames')
-              then { filenames: q.filenames }
-              else { filename: q.filename },
+            model: m.gguf_of(q),
           }, nparallel),
-          llamacpp_quants
+          quants
         ) + [
           parallel.apply(base(mode) {
             name+: "-vllm",
             backend_type: "vllm",
-            model: { source: "huggingface", repo_id: vllm_repo_id },
+            model: m.hf(),
             vllm+: vllm_overrides,
           }, nparallel),
         ],
