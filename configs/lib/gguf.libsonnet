@@ -11,16 +11,23 @@
 //   m.quants           // -> every quant in the repo, as {label, filename[s]}
 //   m.pick(["BF16", "Q8_0"])  // -> that subset, in the order given
 //
-// Models with a `-MTP-GGUF` repo have a second catalog entry ('27b-mtp'), built
-// with `mtp()` -- see below.
+// MTP (multi-token prediction, for self-speculative decoding) comes in two
+// shapes, and a family lib uses whichever its vendor publishes:
+//
+//   * the layer baked into the weights, in a parallel `-MTP-GGUF` repo -- a
+//     second catalog entry ('27b-mtp') built with `mtp()`, run with
+//     `llamacpp+: g.mtp_spec`.  (Qwen 3.5 / 3.6)
+//   * a separate drafter GGUF sitting in the *base* repo under `MTP/` -- no
+//     extra entry; declare `drafts:` on the model and ask for one alongside the
+//     target quant:  m.gguf("UD-Q4_K_XL", draft="Q8_0").  (Gemma 4, Qwen 3.8)
 //
 // Quants are declared compactly; `model()` expands them:
 //   "Q8_0"                     -> Qwen3.5-27B-Q8_0.gguf
 //   { label: "BF16", shards: 2 }  -> BF16/Qwen3.5-27B-BF16-00001-of-00002.gguf, ...
 //   { label: "X", filename: "..." } / { label: "X", filenames: [...] }  -> verbatim
 // A sharded quant lives in a directory named after its label; pass `dir` to
-// override. Catalogs list only the quants themselves -- mmproj, imatrix and
-// MTP draft files are deliberately left out.
+// override. Catalogs list only the quants themselves and (via `drafts`) the MTP
+// drafters -- mmproj and imatrix files are deliberately left out.
 {
   // shards("BF16", "Qwen3.5-27B", "BF16", 2) ->
   //   ["BF16/Qwen3.5-27B-BF16-00001-of-00002.gguf", ".../00002-of-00002.gguf"]
@@ -47,6 +54,12 @@
   // `Qwen/<name>` -- and `opts` overrides either. Other vendors keep the first
   // (Unsloth names its repos the same way) but need the second, e.g.
   //   g.model("gemma-4-26B-A4B-it", quants, { vllm_repo_id: "google/gemma-4-26B-A4B-it" })
+  //
+  // `opts.drafts` lists the precisions of the MTP drafter published under `MTP/`
+  // in the same repo, whose files are `MTP/mtp-<name>-<label>.gguf`. Some repos
+  // name the drafter after a *different* model than the target -- the Gemma 4 qat
+  // repo ships the plain `mtp-gemma-4-26B-A4B-it-*.gguf` -- so `opts.draft_name`
+  // overrides that half of the path.
   model(name, quants, opts={}):: {
     local this = self,
 
@@ -55,6 +68,7 @@
     vllm_repo_id: std.get(opts, "vllm_repo_id", "Qwen/" + name),
     quants: [$.quant(name, q) for q in quants],
     labels: [q.label for q in self.quants],
+    draft_labels: std.get(opts, "drafts", []),
 
     // Quant entry by label; errors (rather than silently 404ing at download
     // time) when the label isn't in the repo.
@@ -67,8 +81,22 @@
 
     pick(labels):: [this.quant(l) for l in labels],
 
+    // The MTP drafter at one precision, as a fragment to merge into a model
+    // block. Errors on an unpublished precision, as quant() does.
+    draft(label)::
+      if !std.member(this.draft_labels, label) then
+        if std.length(this.draft_labels) == 0 then
+          error "%s has no MTP drafter in its repo" % this.name
+        else
+          error "unknown MTP drafter %s for %s (have: %s)"
+                % [label, this.name, std.join(", ", this.draft_labels)]
+      else
+        // `name` (the parameter), not this.name: mtp() renames the entry.
+        { draft_filename: "MTP/mtp-%s-%s.gguf" % [std.get(opts, "draft_name", name), label] },
+
     // Model block for the llamacpp backend, from a quant label ...
-    gguf(label):: this.gguf_of(this.quant(label)),
+    gguf(label, draft=null)::
+      this.gguf_of(this.quant(label)) + (if draft == null then {} else this.draft(draft)),
 
     // ... or from an expanded {label, filename[s]} entry, so callers can also
     // use a GGUF that isn't in the catalog.
@@ -100,7 +128,10 @@
     gguf_repo_id: std.get(opts, "gguf_repo_id", "unsloth/" + name + "-MTP-GGUF"),
   },
 
-  // llama.cpp flags enabling MTP self-speculative decoding. Requires a build
-  // with `--spec-type draft-mtp` support (llama.cpp master as of mid-2026).
-  mtp_spec:: { extra_args: ["--spec-type", "draft-mtp", "--spec-draft-n-max", "2"] },
+  // llama.cpp flags enabling MTP speculative decoding, drafting `n` tokens ahead.
+  // Requires a build with `--spec-type draft-mtp` support (merged 2026-06-07,
+  // ggml-org/llama.cpp#23398). Use with either MTP shape: a `-MTP-GGUF` model,
+  // or a target whose model block names a drafter via `gguf(label, draft=...)`.
+  mtp_spec_n(n):: { extra_args+: ["--spec-type", "draft-mtp", "--spec-draft-n-max", std.toString(n)] },
+  mtp_spec:: $.mtp_spec_n(2),
 }

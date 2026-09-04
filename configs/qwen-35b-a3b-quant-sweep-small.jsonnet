@@ -12,5 +12,5 @@ quant_sweep.make({
   ],
   nparallel: 8,
   // Work around annoying vllm bug #45198
-  vllm: { extra_args: ["--disable-custom-all-reduce"] },
+  vllm: { extra_args+: ["--disable-custom-all-reduce"] },
 })

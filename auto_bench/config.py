@@ -30,11 +30,19 @@ class ModelConfig(BaseModel):
     # vLLM: filter which files to download
     allow_patterns: list[str] | None = None
     ignore_patterns: list[str] | None = None
+    # llama.cpp speculative decoding: a separate draft/MTP GGUF loaded alongside
+    # the target (--spec-draft-model). Gemma 4 and Qwen 3.8 ship theirs in the
+    # same repo as the target, so draft_repo_id defaults to repo_id.
+    draft_repo_id: str | None = None
+    draft_filename: str | None = None
+    draft_local_path: str | None = None
 
     @model_validator(mode="after")
     def _validate(self) -> ModelConfig:
         if self.source == "local" and not self.local_path:
             raise ValueError("local_path is required when source='local'")
+        if self.draft_repo_id and not self.draft_filename:
+            raise ValueError("draft_filename is required when draft_repo_id is set")
         return self
 
     def effective_name(self) -> str:
@@ -45,6 +53,9 @@ class ModelConfig(BaseModel):
         if self.local_path:
             return Path(self.local_path).stem
         return "unknown-model"
+
+    def effective_draft_repo_id(self) -> str | None:
+        return self.draft_repo_id or self.repo_id
 
 
 # ---------------------------------------------------------------------------

@@ -60,7 +60,7 @@ Backend (ABC)
 
 ### Key Config Fields
 
-**ModelConfig** — `source` (huggingface/local), `repo_id`, `filename` (GGUF only), `revision`, `local_path`, `allow_patterns`/`ignore_patterns` (vLLM only)
+**ModelConfig** — `source` (huggingface/local), `repo_id`, `filename` (GGUF only), `revision`, `local_path`, `allow_patterns`/`ignore_patterns` (vLLM only), `draft_filename`/`draft_repo_id`/`draft_local_path` (llama.cpp speculative decoding: a second GGUF passed as `--spec-draft-model`; `draft_repo_id` defaults to `repo_id`)
 
 **ExperimentConfig** also accepts optional `llamacpp` and `vllm` overrides (same schema as `LlamaCppConfig`/`VllmConfig`). These are merged with `LocalConfig` defaults during `merge_configs()`, with experiment values winning. This enables experiment-level backend tuning like `llamacpp: { parallel: 4 }` without modifying the local config.
 
@@ -143,15 +143,23 @@ Quants are declared compactly and expanded by `g.model`: `"Q8_0"` → `<name>-Q8
 `{label: "BF16", shards: 2}` → `BF16/<name>-BF16-00001-of-00002.gguf`, …; an explicit
 `{label, filename|filenames}` object passes through. An unknown label is a jsonnet error
 listing the available ones, rather than a 404 at download time. Catalogs cover the quants
-only — mmproj, imatrix and MTP draft files are omitted.
+and (via `drafts`) the MTP drafters — mmproj and imatrix files are omitted.
 
-Models published a second time as `unsloth/<name>-MTP-GGUF` (identical weights with the
-multi-token-prediction layer kept, ~2% larger) get a `-mtp` catalog entry built by `g.mtp`,
-e.g. `d.models['27b-mtp']`. They run like any other GGUF; to use the MTP layer for
-self-speculative decoding, add `llamacpp+: gguf.mtp_spec` (`--spec-type draft-mtp
---spec-draft-n-max 2`, needs a llama.cpp build supporting it). Published quant lists differ
-between a base repo and its MTP repo, so each is listed separately. Qwen 3.8 has no such
-repos — it ships a separate MTP draft module inside the base repo instead.
+MTP (multi-token prediction, for speculative decoding) is published in two shapes, and both
+need `llamacpp+: gguf.mtp_spec_n(n)` (`--spec-type draft-mtp --spec-draft-n-max n`;
+`mtp_spec` is `n=2`) plus a llama.cpp build from after 2026-06-07:
+
+- **Baked into the weights**, in a parallel `unsloth/<name>-MTP-GGUF` repo (identical weights
+  with the MTP layer kept, ~2% larger) — Qwen 3.5/3.6. These get a second catalog entry built
+  by `g.mtp`, e.g. `d.models['27b-mtp']`, and run like any other GGUF. Published quant lists
+  differ between a base repo and its MTP repo, so each is listed separately.
+- **A separate drafter GGUF** under `MTP/` in the *base* repo — Gemma 4 and Qwen 3.8. No extra
+  catalog entry: the model declares `drafts: ["Q8_0", …]` (precisions of
+  `MTP/mtp-<name>-<label>.gguf`, with `draft_name` overriding that `<name>` where a repo names
+  its drafter after a different model, as the Gemma 4 qat repo does), and a config asks for one
+  alongside the target quant with `m.gguf("UD-Q4_K_XL", draft="Q8_0")`. That sets
+  `model.draft_filename`, which the llamacpp backend downloads and passes to
+  `--spec-draft-model`.
 
 `quant_sweep.make` takes a catalog entry as `model:` and label strings as `quants:`
 (defaulting to the whole repo).

@@ -26,8 +26,11 @@
 // every quant published in the Unsloth GGUF repo. Only 27B is catalogued --
 // Qwen3.8-2.4T-A95B and Qwen3.8-Flash-Next also ship GGUFs, but nothing here
 // runs them yet. Unlike 3.5/3.6 there are no `-MTP-GGUF` repos and so no `-mtp`
-// entries; 3.8 instead ships a separate MTP draft module inside the base repo
-// (`MTP/mtp-Qwen3.8-27B-Q4_0.gguf`), which this harness has no way to wire up.
+// entries; 3.8 instead ships a separate MTP drafter inside the base repo, asked
+// for alongside the target quant:
+//   model: m.gguf("Q8_0", draft="Q4_0"),  llamacpp+: g.mtp_spec,
+// Q4_0 (~1.4GB) is the only precision published, and Unsloth documents no
+// recommended draft depth for 3.8, so mtp_spec's 2 is the conservative choice.
 //   local m = d.models['27b'];  m.gguf("Q8_0") / m.hf() / m.quants
 local defaults = import 'defaults.libsonnet';
 local g = import 'gguf.libsonnet';
@@ -87,6 +90,6 @@ local common = defaults {
       "UD-Q4_K_M", "UD-Q4_K_S", "UD-Q4_K_XL", "UD-Q5_K_M",
       "UD-Q5_K_S", "UD-Q5_K_XL", "UD-Q6_K", "UD-Q6_K_L",
       "UD-Q6_K_M", "UD-Q6_K_XL", "UD-Q8_K_L", "UD-Q8_K_XL",
-    ]),
+    ], { drafts: ["Q4_0"] }),
   },
 }

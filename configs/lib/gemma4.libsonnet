@@ -19,10 +19,14 @@
 //   local m = d.models['26b-a4b'];  m.gguf("UD-Q4_K_XL") / m.hf() / m.quants
 //
 // MTP: unlike Qwen 3.5/3.6 there is no parallel `-MTP-GGUF` model repo, so there
-// is no `-mtp` catalog entry. The base repo instead ships separate draft modules
-// (`mtp-gemma-4-26B-A4B-it.gguf` and an `MTP/` directory). Using one would mean
-// pointing llama-server at it with --spec-draft-model / --spec-draft-hf, which no
-// config field models today -- untested here.
+// is no `-mtp` catalog entry. The base repo instead ships a separate drafter under
+// `MTP/`, asked for alongside the target quant:
+//   model: m.gguf("UD-Q4_K_XL", draft="Q8_0"),
+//   llamacpp+: g.mtp_spec_n(4),
+// Q8_0 (~462MB) is the recommended precision -- BF16/F16 are the same drafter at
+// ~855MB -- and Unsloth recommends drafting 4 tokens ahead. Needs a llama.cpp
+// build from after 2026-06-07 (PR ggml-org/llama.cpp#23398); older ones cannot
+// load the drafter's `gemma4-assistant` arch.
 local defaults = import 'defaults.libsonnet';
 local g = import 'gguf.libsonnet';
 
@@ -61,12 +65,20 @@ local common = defaults {
       "UD-Q2_K_XL", "UD-Q3_K_M", "UD-Q3_K_XL", "UD-Q4_K_M",
       "UD-Q4_K_S", "UD-Q4_K_XL", "UD-Q5_K_M", "UD-Q5_K_S",
       "UD-Q5_K_XL", "UD-Q6_K", "UD-Q6_K_XL", "UD-Q8_K_XL",
-    ], { vllm_repo_id: "google/gemma-4-26B-A4B-it" }),
+    ], {
+      vllm_repo_id: "google/gemma-4-26B-A4B-it",
+      drafts: ["Q8_0", "BF16", "F16"],
+    }),
 
     // Quantization-aware-trained weights: quantized during training rather than
     // after, so 4-bit holds up far better. The repo publishes this one quant.
     "26b-a4b-qat": g.model("gemma-4-26B-A4B-it-qat", [
       "UD-Q4_K_XL",
-    ], { vllm_repo_id: "google/gemma-4-26B-A4B-it-qat-q4_0-unquantized" }),
+    ], {
+      vllm_repo_id: "google/gemma-4-26B-A4B-it-qat-q4_0-unquantized",
+      // The drafters here are the base model's, name and all -- no `-qat`.
+      drafts: ["Q4_0", "Q8_0", "BF16", "F16"],
+      draft_name: "gemma-4-26B-A4B-it",
+    }),
   },
 }

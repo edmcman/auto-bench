@@ -20,7 +20,7 @@ dependencies = [
     "datasets>=2.0",
     # Harbor is invoked via `uvx harbor run` (uv must be installed separately)
     "matplotlib>=3.7",
-    "vllm>=0.6",
+    "vllm>=0.21",  # >=0.21 for Gemma 4 MTP (vllm-project/vllm#41745)
     "zstandard>=0.22",
 ]
 

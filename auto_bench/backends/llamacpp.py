@@ -22,8 +22,15 @@ class LlamaCppBackend(SubprocessBackend):
     def __init__(self, model: ModelConfig, backend: BackendConfig, sampling: SamplingConfig, backend_options: BackendOptions | None = None) -> None:
         super().__init__(model, backend, sampling, backend_options)
         self._model_path: str | None = None
+        self._draft_path: str | None = None
 
     def download(self) -> str:
+        path = self._download_target()
+        # Fetch the speculative-decoding drafter, if any, under the same step.
+        self._draft_path = self._download_draft()
+        return path
+
+    def _download_target(self) -> str:
         if (path := self._resolve_local_model()) is not None:
             return path
         assert self.model.repo_id, "model.repo_id is required for llamacpp backend"
@@ -42,6 +49,42 @@ class LlamaCppBackend(SubprocessBackend):
             revision=self.model.revision,
             token=self.model.hf_token,
         )
+
+    def _download_draft(self) -> str | None:
+        """Fetch the speculative-decoding draft model, or None if none is configured.
+
+        Note that `remove_downloaded_models` deletes the target's whole HF revision,
+        which covers a drafter from the same repo (every case today) but would leave
+        one from a different draft_repo_id behind.
+        """
+        if self.model.draft_local_path:
+            console.print(f"[cyan]Using local draft model:[/cyan] {self.model.draft_local_path}")
+            return self.model.draft_local_path
+        if not self.model.draft_filename:
+            return None
+        repo_id = self.model.effective_draft_repo_id()
+        assert repo_id, "model.draft_repo_id or model.repo_id is required for a draft model"
+        return download_gguf(
+            repo_id=repo_id,
+            filename=self.model.draft_filename,
+            revision=self.model.revision,
+            token=self.model.hf_token,
+        )
+
+    def _cached_draft_path(self) -> str | None:
+        """Draft model path for the start command, never downloading: the one
+        download() fetched, else a cached copy, else a placeholder (as `serve
+        --dry-run` does for the target model)."""
+        if self._draft_path:
+            return self._draft_path
+        if self.model.draft_local_path:
+            return self.model.draft_local_path
+        if not self.model.draft_filename:
+            return None
+        repo_id = self.model.effective_draft_repo_id()
+        assert repo_id, "model.draft_repo_id or model.repo_id is required for a draft model"
+        cached = cached_gguf_path(repo_id, self.model.draft_filename, revision=self.model.revision)
+        return cached or "DRAFT_MODEL_PATH"
 
     def cached_model_path(self) -> str | None:
         if (path := self._resolve_local_model()) is not None:
@@ -76,6 +119,9 @@ class LlamaCppBackend(SubprocessBackend):
             inner_args += ["--n-gpu-layers", str(cfg.n_gpu_layers)]
         if self.backend_options.chat_template_kwargs:
             inner_args += ["--chat-template-kwargs", json.dumps(self.backend_options.chat_template_kwargs)]
+        # Before extra_args so a config can still override the spec-decoding flags.
+        if (draft := self._cached_draft_path()) is not None:
+            inner_args += ["--spec-draft-model", draft]
         inner_args.extend(cfg.extra_args)
 
         parts = shlex.split(cfg.cmd_template.format(
