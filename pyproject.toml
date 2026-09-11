@@ -22,6 +22,7 @@ dependencies = [
     "matplotlib>=3.7",
     "vllm>=0.21",  # >=0.21 for Gemma 4 MTP (vllm-project/vllm#41745)
     "zstandard>=0.22",
+    "transformers==5.14.1" # https://github.com/vllm-project/vllm/issues/51744
 ]
 
 [project.scripts]
