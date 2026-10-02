@@ -3,9 +3,14 @@
 {
 	"name": "Docker in Docker",
 	// Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
-	"image": "mcr.microsoft.com/devcontainers/base:ubuntu-24.04",
+	// NVIDIA CUDA devel image (not the devcontainers/base + nvidia-cuda feature combo): that
+	// feature tops out at CUDA 12.5, which is too old for flashinfer's nvcc flags when vLLM's
+	// torch build targets newer CUDA. Bump this tag in lockstep with whatever CUDA version
+	// `uv tool install vllm` pulls torch for.
+	"image": "nvidia/cuda:13.0.3-devel-ubuntu24.04",
 
 	"features": {
+		"ghcr.io/devcontainers/features/common-utils:2": {},
 		"ghcr.io/devcontainers/features/docker-in-docker:2": {
 			"version": "latest",
 			"moby": "true"
@@ -15,12 +20,10 @@
 		"./features/docker-config": {},
 		"ghcr.io/devcontainers-extra/features/apt-packages:1": {
 			"packages": "tmux python3.12-dev ninja-build jsonnet"
-		},
-		"ghcr.io/devcontainers/features/nvidia-cuda:3": {
-          "installToolkit": true
-        }
-
+		}
 	},
+
+	"remoteUser": "vscode",
 
 	// Use this environment variable if you need to bind mount your local source code into a new container.
 	"remoteEnv": {

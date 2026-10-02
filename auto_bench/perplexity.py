@@ -35,7 +35,7 @@ def run_llama_perplexity(
         text_file = Path(f.name)
 
     try:
-        extra: list[str] = ["-ngl", str(ngl), "--no-mmap"]
+        extra: list[str] = ["-ngl", str(ngl)]
         if logits_save:
             extra += ["--save-all-logits", str(logits_save)]
         if logits_base:
