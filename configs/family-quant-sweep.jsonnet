@@ -17,10 +17,11 @@
 // distribution-preserving, so resolve rates should match a non-MTP run; it only
 // buys throughput.
 //
-// llama.cpp -- on for all four families, in whichever shape each publishes:
+// llama.cpp -- on for the three Qwen families, in whichever shape each publishes:
 //   Qwen 3.5/3.6 come from their `-MTP-GGUF` repos (the layer baked into the
-//   weights); Qwen 3.8 and Gemma 4 load a separate drafter out of the base repo.
+//   weights); Qwen 3.8 loads a separate drafter out of the base repo.
 //   Needs a build from after 2026-06-07 (ggml-org/llama.cpp#23398).
+//   Off for Gemma 4 -- see its entry below.
 //
 // vLLM -- on for all four, in two shapes, and needs vllm >= 0.21 (pyproject):
 //   * The three Qwen checkpoints declare model_type qwen3_5 / qwen3_5_moe and
@@ -113,8 +114,16 @@ local families = [
   {
     label: "gemma4-26b-a4b",
     model: gemma4.models["26b-a4b"],
-    draft: "Q8_0",     // ~462MB; BF16/F16 are the same drafter, larger
-    spec: g.mtp_spec,  // unsloth.ai/docs/models/mtp: start at 2, tune 1-6 per host
+    // MTP drafter disabled. On build 10914 the Gemma 4 drafter collapses
+    // throughput with parallel slots: at 8 slots x 262k ctx, generation drops
+    // from ~55 to ~2 t/s per slot (368 -> 16 t/s aggregate), which timed out
+    // most tasks in earlier runs. It's harmless with 1 slot, and the slowdown
+    // shrinks with ctx (87 vs 367 t/s at 8 x 32k), so it scales with the
+    // drafter's n_ctx. --fit also can't measure the drafter ("fitting without
+    // it"), hence the 34GB cudaMalloc failure at startup. See
+    // ggml-org/llama.cpp#29521. Re-enable once fixed:
+    // draft: "Q8_0",     // ~462MB; BF16/F16 are the same drafter, larger
+    // spec: g.mtp_spec,  // unsloth.ai/docs/models/mtp: start at 2, tune 1-6 per host
     modes: [
       { label: "thinking", preset: gemma4.thinking },
       { label: "nonthinking", preset: gemma4.nonthinking },
@@ -137,7 +146,7 @@ local with_mtp(f, entries) = std.map(
     else
       e {
         model+: if std.objectHas(f, "draft") then f.model.draft(f.draft) else {},
-        llamacpp+: f.spec,
+        llamacpp+: std.get(f, "spec", {}),
       },
   entries
 );
